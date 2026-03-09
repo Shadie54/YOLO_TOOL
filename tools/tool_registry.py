@@ -1,31 +1,31 @@
-from tools.tool_types import ToolType
+from tools.tool_types import FREEHAND, LINE, WHITE, TEXT, UNDO
 
-# definícia všetkých nástrojov GUI
+ICON_PATH = "assets/icons/"
+
 TOOL_REGISTRY = {
-
-    ToolType.FREEHAND: {
-        "icon": "pencil.png",
-        "tooltip": "Freehand drawing"
+    FREEHAND: {
+        "icon": ICON_PATH + "pencil.png",
+        "tooltip": "Freehand drawing",
+        "shortcut": "F",
     },
-
-    ToolType.LINE: {
-        "icon": "line.png",
-        "tooltip": "Draw line"
+    LINE: {
+        "icon": ICON_PATH + "line.png",
+        "tooltip": "Draw line",
+        "shortcut": "L",
     },
-
-    ToolType.WHITE: {
-        "icon": "del.png",
-        "tooltip": "Erase"
+    WHITE: {
+        "icon": ICON_PATH + "del.png",
+        "tooltip": "Erase (white brush)",
+        "shortcut": "E",
     },
-
-    ToolType.TEXT: {
-        "icon": "text.png",
-        "tooltip": "Text tool"
+    TEXT: {
+        "icon": ICON_PATH + "text.png",
+        "tooltip": "Insert text",
+        "shortcut": "T",
     },
-
-    ToolType.UNDO: {
-        "icon": "undo.png",
-        "tooltip": "Undo action"
+    UNDO: {
+        "icon": ICON_PATH + "undo.png",
+        "tooltip": "Undo last action",
+        "shortcut": "Ctrl+Z",
     },
-
 }

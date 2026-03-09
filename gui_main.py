@@ -7,15 +7,19 @@ from PyQt6.QtWidgets import (
     QApplication, QWidget, QPushButton, QVBoxLayout, QHBoxLayout,
     QScrollArea, QTextEdit, QFileDialog, QSlider, QLabel, QSizePolicy
 )
-from PyQt6.QtGui import QIcon
+from PyQt6.QtGui import QIcon, QShortcut, QKeySequence
 from PyQt6.QtCore import Qt, QSize
 
 from canvas.image_canvas import ImageCanvas
 from yolo.yolo_processor import YoloProcessor
 from tools.delete_tools import DeleteTool
+from tools.tool_registry import TOOL_REGISTRY
+from tools.tool_types import WHITE
+
 
 class MainWindow(QWidget):
-    def __init__(self, yolo):
+    def __init__(self, yolo_processor):
+        self.yolo = yolo_processor
         super().__init__()
         self.setWindowTitle("YoloCAT - interaktívny nástroj na miestopisy")
         self.resize(1400, 1000)
@@ -31,7 +35,8 @@ class MainWindow(QWidget):
         self.deleted_boxes = []
         self.hover_box = None
         self.zoom = 1.0
-
+        # ---------------------- TOOL BUTTONS ----------------------
+        self.tool_buttons = {}
         # ------------------------- TOOLS -------------------------
         self.current_tool_type = None
         self.brush_size = 1
@@ -100,7 +105,8 @@ class MainWindow(QWidget):
         self.delete_tool = DeleteTool(self.image_label)
 
     # ------------------------- SCROLL AREA -------------------------
-    def create_scroll_area(self, widget):
+    @staticmethod
+    def create_scroll_area(widget):
         scroll = QScrollArea()
         scroll.setWidget(widget)
         scroll.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop)
@@ -124,10 +130,39 @@ class MainWindow(QWidget):
         layout.addStretch()
         return layout
 
-    def use_text_tool(self, *args, **kwargs):
+    def create_tools(self):
+
+        layout = QHBoxLayout()
+        self.tool_buttons = {}
+
+        for tool_name, props in TOOL_REGISTRY.items():
+            btn = QPushButton()
+            btn.setFixedSize(100, 50)
+
+            btn.setIcon(QIcon(props["icon"]))
+            btn.setIconSize(QSize(32, 32))
+
+            btn.setToolTip(
+                f'{props["tooltip"]} ({props["shortcut"]})'
+            )
+
+            # klik na tlačidlo
+            btn.clicked.connect(lambda checked, t=tool_name: self.select_tool(t))
+
+            # klávesová skratka
+            shortcut = QShortcut(QKeySequence(props["shortcut"]), self)
+            shortcut.activated.connect(lambda t=tool_name: self.select_tool(t))
+
+            self.tool_buttons[tool_name] = btn
+            layout.addWidget(btn)
+
+        layout.addStretch()
+        return layout
+
+    def use_text_tool(self):
         self.log_msg("Text tool clicked (placeholder)")
 
-    def use_undo_tool(self, *args, **kwargs):
+    def use_undo_tool(self):
         self.log_msg("Undo tool clicked (placeholder)")
     # ------------------------- TOOL PANEL -------------------------
     def create_tool_panel(self):
@@ -251,7 +286,9 @@ class MainWindow(QWidget):
     def select_tool(self, tool_name):
         dl = self.image_label.drawing_engine
         if not dl: return
+
         if self.current_tool_type == tool_name:
+            # deaktivácia
             self.current_tool_type = None
             self.image_label.drawing_enabled = False
             dl.tool = None
@@ -259,11 +296,13 @@ class MainWindow(QWidget):
             self.log_msg("No tool active")
             return
 
+        # aktivácia
         self.current_tool_type = tool_name
         self.image_label.drawing_enabled = True
         dl.tool = tool_name
         dl.brush_size = self.brush_size
-        dl.brush_color = (255, 255, 255) if tool_name == "white" else (0, 0, 0)
+        dl.brush_color = (255, 255, 255) if tool_name == WHITE else (0, 0, 0)
+
         dl.drawing = False
         dl.start_point = None
         dl.line_start = None
@@ -274,19 +313,12 @@ class MainWindow(QWidget):
         self.log_msg(f"Selected tool: {tool_name}")
 
     def _reset_tool_buttons(self):
-        for b in [self.freehand_btn, self.line_btn, self.white_btn, self.text_btn, self.undo_btn]:
-            b.setStyleSheet("")
+        for btn in self.tool_buttons.values():
+            btn.setStyleSheet("")
 
     def _highlight_button(self, tool_name):
-        btn_map = {
-            "freehand": self.freehand_btn,
-            "line": self.line_btn,
-            "white": self.white_btn,
-            "text": self.text_btn,
-            "undo": self.undo_btn
-        }
-        if tool_name in btn_map:
-            btn_map[tool_name].setStyleSheet("background-color: lightblue")
+        if tool_name in self.tool_buttons:
+            self.tool_buttons[tool_name].setStyleSheet("background-color: lightblue")
 
     # ------------------------- BRUSH -------------------------
     def update_brush_size(self, value):
@@ -316,8 +348,9 @@ class MainWindow(QWidget):
         try:
             data = np.frombuffer(open(path, "rb").read(), np.uint8)
             self.cv_image = cv2.imdecode(data, cv2.IMREAD_COLOR)
-        except:
-            self.log_msg(f"Failed loading {path}")
+        except Exception as e:
+            self.log_msg(f"Failed loading image: {path}")
+            self.log_msg(f"Failed loading image: {e}")
             return
 
         self.boxes = []
