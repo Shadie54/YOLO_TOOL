@@ -1,0 +1,21 @@
+# Python cache súbory
+__pycache__/
+*.pyc
+*.pyo
+
+# Virtual environment
+venv/
+env/
+*.env
+
+# IDE / editor
+.idea/
+*.iml
+
+# OS súbory
+.DS_Store
+Thumbs.db
+
+# Výstupy z YOLO alebo iných experimentov
+output/
+*.log
