@@ -44,13 +44,13 @@ class MainWindow(QWidget):
         self.deleted_boxes = []
         self.hover_box = None
         self.zoom = 1.0
-        # ---------------------- TOOL BUTTONS ----------------------
-        self.tool_buttons = {}
+
         # ------------------------- TOOLS -------------------------
         self.current_tool_type = None
         self.brush_size = 1
         self.brush_color = (0, 0, 0)
-
+        self.shortcuts = []
+        self.tool_buttons = {} #TOOL BUTTONS
         # ------------------------- FOLDER -------------------------
         self.image_paths = []
         self.current_index = 0
@@ -103,6 +103,7 @@ class MainWindow(QWidget):
 
         self.connect_signals()
         self.delete_tool = DeleteTool(self.image_label)
+        self.create_global_shortcuts()
 
     # ------------------------- SCROLL AREA -------------------------
     @staticmethod
@@ -152,11 +153,13 @@ class MainWindow(QWidget):
             btn.setIcon(QIcon(resource_path(props["icon"])))
             btn.setIconSize(QSize(64, 64))
             btn.setFixedSize(80, 80)
+            btn.setToolTip(f'{props["tooltip"]} ({props["shortcut"]})') # pripojenie tooltipov z tool_registry.py
             btn.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
 
             btn.clicked.connect(lambda checked=False, t=tool_enum: self.select_tool(t))
             shortcut = QShortcut(QKeySequence(props["shortcut"]), self)
             shortcut.activated.connect(lambda t=tool_enum: self.select_tool(t))
+            self.shortcuts.append(shortcut)
 
             layout.addWidget(btn)
 
@@ -389,13 +392,20 @@ class MainWindow(QWidget):
 
     # ------------------------- SAVE -------------------------
     def save_image(self):
-        if self.cv_image is None: return
-        folder = os.path.dirname(self.image_paths[self.current_index])
-        out_folder = os.path.join(folder, "output")
-        os.makedirs(out_folder, exist_ok=True)
-        filename = os.path.basename(self.image_paths[self.current_index])
-        save_path = os.path.join(out_folder, filename)
-        cv2.imwrite(save_path, self.cv_image)
+        if self.cv_image is None:
+            return
+
+        folder = Path(self.image_paths[self.current_index]).parent
+        folder_name = folder.name
+
+        out_folder = folder / folder_name
+        out_folder.mkdir(exist_ok=True)
+
+        filename = Path(self.image_paths[self.current_index]).name
+        save_path = out_folder / filename
+
+        cv2.imwrite(str(save_path), self.cv_image)
+
         self.log_msg(f"Saved: {save_path}")
 
     # ------------------------- ZOOM -------------------------
@@ -420,6 +430,45 @@ class MainWindow(QWidget):
         self.redraw()
         super().resizeEvent(event)
 
+    def create_global_shortcuts(self):
+
+        # SPACE → fit zoom
+        sc = QShortcut(QKeySequence("Space"), self)
+        sc.setContext(Qt.ShortcutContext.ApplicationShortcut)
+        sc.activated.connect(self.fit_to_window)
+        self.shortcuts.append(sc)
+        
+        # CTRL + O → open folder
+        sc = QShortcut(QKeySequence("Ctrl+O"), self)
+        sc.setContext(Qt.ShortcutContext.ApplicationShortcut)
+        sc.activated.connect(self.load_folder)
+        self.shortcuts.append(sc)
+
+        # CTRL + Z → undo
+        #sc = QShortcut(QKeySequence("Ctrl+Z"), self)
+        #sc.setContext(Qt.ShortcutContext.ApplicationShortcut)
+        #sc.activated.connect(self.fit_to_window)
+        #self.shortcuts.append(sc)
+
+        # CTRL + S → save image
+        sc = QShortcut(QKeySequence("Ctrl+S"), self)
+        sc.setContext(Qt.ShortcutContext.ApplicationShortcut)
+        sc.activated.connect(self.save_image)
+        self.shortcuts.append(sc)
+
+    # ----------------- SPACE shortcut to reset image zoom method -----------------
+    def fit_to_window(self):
+        if self.cv_image is None:
+            return
+
+        # prepocitaj zoom podľa veľkosti scroll area
+        self.fit_zoom()
+
+        # prekresli canvas
+        self.redraw()
+
+        # voliteľný log
+        self.log_msg("Zoom: Fit to window")
 # ------------------------- MAIN -------------------------
 if __name__ == "__main__":
     ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID("YoloCAT")
