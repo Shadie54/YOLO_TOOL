@@ -2,6 +2,7 @@ import cv2
 from PyQt6.QtWidgets import QLabel
 from PyQt6.QtGui import QPixmap, QImage
 from canvas.drawing_engine import DrawingEngine
+from tools.tool_types import ToolType
 
 class ImageCanvas(QLabel):
 
@@ -53,7 +54,7 @@ class ImageCanvas(QLabel):
 
         # Line preview
         dl = self.drawing_engine
-        if dl and dl.tool == "line" and dl.preview_line:
+        if dl and dl.tool == ToolType.LINE and dl.preview_line:
             (x1, y1), (x2, y2) = dl.preview_line
             cv2.line(
                 img,
