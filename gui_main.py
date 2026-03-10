@@ -14,7 +14,7 @@ from canvas.image_canvas import ImageCanvas
 from yolo.yolo_processor import YoloProcessor
 from tools.delete_tools import DeleteTool
 from tools.tool_registry import TOOL_REGISTRY
-from tools.tool_types import WHITE
+from tools.tool_types import ToolType
 
 
 class MainWindow(QWidget):
@@ -130,30 +130,26 @@ class MainWindow(QWidget):
         layout.addStretch()
         return layout
 
+    # ------------------------- CREATE TOOLS -------------------------
     def create_tools(self):
-
         layout = QHBoxLayout()
         self.tool_buttons = {}
 
-        for tool_name, props in TOOL_REGISTRY.items():
+        for tool_enum, props in TOOL_REGISTRY.items():
             btn = QPushButton()
             btn.setFixedSize(100, 50)
-
             btn.setIcon(QIcon(props["icon"]))
             btn.setIconSize(QSize(32, 32))
+            btn.setToolTip(f'{props["tooltip"]} ({props["shortcut"]})')
 
-            btn.setToolTip(
-                f'{props["tooltip"]} ({props["shortcut"]})'
-            )
+            # --- klik na tlačidlo s uzamknutím Enum ---
+            btn.clicked.connect(lambda checked=False, t=tool_enum: self.select_tool(t))
 
-            # klik na tlačidlo
-            btn.clicked.connect(lambda checked, t=tool_name: self.select_tool(t))
-
-            # klávesová skratka
+            # --- shortcut s uzamknutím Enum ---
             shortcut = QShortcut(QKeySequence(props["shortcut"]), self)
-            shortcut.activated.connect(lambda t=tool_name: self.select_tool(t))
+            shortcut.activated.connect(lambda t=tool_enum: self.select_tool(t))
 
-            self.tool_buttons[tool_name] = btn
+            self.tool_buttons[tool_enum] = btn
             layout.addWidget(btn)
 
         layout.addStretch()
@@ -214,11 +210,11 @@ class MainWindow(QWidget):
         self.next_btn.clicked.connect(self.next_image)
         self.process_btn.clicked.connect(self.toggle_yolo_auto)
         self.save_btn.clicked.connect(self.save_image)
-        self.freehand_btn.clicked.connect(lambda: self.select_tool("freehand"))
-        self.line_btn.clicked.connect(lambda: self.select_tool("line"))
-        self.white_btn.clicked.connect(lambda: self.select_tool("white"))
-        self.text_btn.clicked.connect(lambda: self.select_tool("text"))
-        self.undo_btn.clicked.connect(lambda: self.select_tool("undo"))
+        self.freehand_btn.clicked.connect(lambda: self.select_tool(ToolType.FREEHAND))
+        self.line_btn.clicked.connect(lambda: self.select_tool(ToolType.LINE))
+        self.white_btn.clicked.connect(lambda: self.select_tool(ToolType.WHITE))
+        self.text_btn.clicked.connect(lambda: self.select_tool(ToolType.TEXT))
+        self.undo_btn.clicked.connect(lambda: self.select_tool(ToolType.UNDO))
         self.brush_slider.valueChanged.connect(self.update_brush_size)
 
     # ------------------------- LOG -------------------------
@@ -282,43 +278,42 @@ class MainWindow(QWidget):
         self.image_label.zoom = self.zoom
         self.image_label.redraw()
 
-    # ------------------------- TOOL SELECTION -------------------------
-    def select_tool(self, tool_name):
+    # ------------------------- SELECT TOOL -------------------------
+    def select_tool(self, tool_enum: ToolType):
         dl = self.image_label.drawing_engine
-        if not dl: return
+        if not dl:
+            return
 
-        if self.current_tool_type == tool_name:
-            # deaktivácia
+        # toggle tool
+        if self.current_tool_type == tool_enum:
             self.current_tool_type = None
             self.image_label.drawing_enabled = False
             dl.tool = None
-            self._reset_tool_buttons()
+            self._highlight_button(None)  # zruší highlight
             self.log_msg("No tool active")
             return
 
-        # aktivácia
-        self.current_tool_type = tool_name
+        self.current_tool_type = tool_enum
         self.image_label.drawing_enabled = True
-        dl.tool = tool_name
+        dl.tool = tool_enum
         dl.brush_size = self.brush_size
-        dl.brush_color = (255, 255, 255) if tool_name == WHITE else (0, 0, 0)
+        dl.brush_color = (255, 255, 255) if tool_enum == ToolType.WHITE else (0, 0, 0)
 
-        dl.drawing = False
-        dl.start_point = None
-        dl.line_start = None
-        dl.preview_line = None
+        self._highlight_button(tool_enum)
+        self.log_msg(f"Selected tool: {tool_enum.name}")
 
-        self._reset_tool_buttons()
-        self._highlight_button(tool_name)
-        self.log_msg(f"Selected tool: {tool_name}")
-
+    # ------------------------- RESET BUTTONS -------------------------
     def _reset_tool_buttons(self):
         for btn in self.tool_buttons.values():
             btn.setStyleSheet("")
 
-    def _highlight_button(self, tool_name):
-        if tool_name in self.tool_buttons:
-            self.tool_buttons[tool_name].setStyleSheet("background-color: lightblue")
+    # ------------------------- HIGHLIGHT BUTTON -------------------------
+    def _highlight_button(self, active_tool: ToolType | None):
+        for t, btn in self.tool_buttons.items():
+            if active_tool is not None and t.value == active_tool.value:  # porovnanie podľa value Enum
+                btn.setStyleSheet("background-color: lightblue")
+            else:
+                btn.setStyleSheet("")
 
     # ------------------------- BRUSH -------------------------
     def update_brush_size(self, value):

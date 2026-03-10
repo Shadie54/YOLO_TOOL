@@ -1,29 +1,29 @@
-from tools.tool_types import FREEHAND, LINE, WHITE, TEXT, UNDO
+from tools.tool_types import ToolType
 
 ICON_PATH = "assets/icons/"
 
 TOOL_REGISTRY = {
-    FREEHAND: {
+    ToolType.FREEHAND: {
         "icon": ICON_PATH + "pencil.png",
         "tooltip": "Freehand drawing",
         "shortcut": "F",
     },
-    LINE: {
+    ToolType.LINE: {
         "icon": ICON_PATH + "line.png",
         "tooltip": "Draw line",
         "shortcut": "L",
     },
-    WHITE: {
+    ToolType.WHITE: {
         "icon": ICON_PATH + "del.png",
         "tooltip": "Erase (white brush)",
         "shortcut": "E",
     },
-    TEXT: {
+    ToolType.TEXT: {
         "icon": ICON_PATH + "text.png",
         "tooltip": "Insert text",
         "shortcut": "T",
     },
-    UNDO: {
+    ToolType.UNDO: {
         "icon": ICON_PATH + "undo.png",
         "tooltip": "Undo last action",
         "shortcut": "Ctrl+Z",
