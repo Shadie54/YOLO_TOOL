@@ -2,25 +2,38 @@ import os
 os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
 import sys
 import cv2
+import ctypes
 import numpy as np
 from PyQt6.QtWidgets import (
     QApplication, QWidget, QPushButton, QVBoxLayout, QHBoxLayout,
     QScrollArea, QTextEdit, QFileDialog, QSlider, QLabel, QSizePolicy
 )
-from PyQt6.QtGui import QIcon
+from PyQt6.QtGui import QIcon, QShortcut, QKeySequence
 from PyQt6.QtCore import Qt, QSize
-
 from canvas.image_canvas import ImageCanvas
 from yolo.yolo_processor import YoloProcessor
 from tools.delete_tools import DeleteTool
+from tools.tool_registry import TOOL_REGISTRY
+from tools.tool_types import ToolType
+from pathlib import Path
 
+# ------------------------- RESOURCE PATH -------------------------
+def resource_path(relative_path: str) -> str:
+    """Vracia cestu k zdroju, funguje lokálne aj v EXE."""
+    try:
+        # PyInstaller onedir/onefile
+        base_path = sys._MEIPASS
+    except AttributeError:
+        base_path = os.path.abspath(".")
+    return os.path.join(base_path, relative_path)
 class MainWindow(QWidget):
-    def __init__(self, yolo):
+
+    def __init__(self, yolo_processor):
+        self.yolo = yolo_processor
         super().__init__()
         self.setWindowTitle("YoloCAT - interaktívny nástroj na miestopisy")
         self.resize(1400, 1000)
-        self.setWindowIcon(QIcon("assets/icons/yolocat.ico"))
-
+        self.setWindowIcon(QIcon(resource_path("assets/icons/yolocat.ico")))
         # ------------------------- MODEL -------------------------
         self.yolo = yolo
         self.yolo_auto = False
@@ -31,7 +44,8 @@ class MainWindow(QWidget):
         self.deleted_boxes = []
         self.hover_box = None
         self.zoom = 1.0
-
+        # ---------------------- TOOL BUTTONS ----------------------
+        self.tool_buttons = {}
         # ------------------------- TOOLS -------------------------
         self.current_tool_type = None
         self.brush_size = 1
@@ -40,7 +54,7 @@ class MainWindow(QWidget):
         # ------------------------- FOLDER -------------------------
         self.image_paths = []
         self.current_index = 0
-        self.last_folder = r"C:\Users\LUBO-PC-STOLNY\Desktop\TEST\miestopisy_test\zr9"
+        self.last_folder = ""
 
         # ------------------------- WIDGETS -------------------------
         self.load_btn = QPushButton()
@@ -59,19 +73,7 @@ class MainWindow(QWidget):
         self.image_label = None
         self.delete_tool = None
 
-        # ------------------------- BUILD GUI -------------------------
         self.build_gui()
-
-        # ------------------------- AUTO LOAD FIRST IMAGE -------------------------
-        if os.path.isdir(self.last_folder):
-            self.image_paths = [
-                os.path.join(self.last_folder, f)
-                for f in sorted(os.listdir(self.last_folder))
-                if f.lower().endswith((".jpg", ".jpeg", ".png"))
-            ]
-            if self.image_paths:
-                self.current_index = 0
-                self.load_image()
 
     # ------------------------- BUILD GUI -------------------------
     def build_gui(self):
@@ -83,7 +85,10 @@ class MainWindow(QWidget):
 
         scroll = self.create_scroll_area(self.image_label)
         toolbar_layout = self.create_toolbar()
-        tool_panel_layout = self.create_tool_panel()
+
+        self.create_tools()  # <--- nastaví tlačidlá tool_buttons
+        tool_panel_layout = self.create_tool_panel()  # teraz tlačidlá + brush slider
+
         log_widget = self.create_log_panel()
 
         top_layout = QHBoxLayout()
@@ -100,7 +105,8 @@ class MainWindow(QWidget):
         self.delete_tool = DeleteTool(self.image_label)
 
     # ------------------------- SCROLL AREA -------------------------
-    def create_scroll_area(self, widget):
+    @staticmethod
+    def create_scroll_area(widget):
         scroll = QScrollArea()
         scroll.setWidget(widget)
         scroll.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop)
@@ -108,64 +114,74 @@ class MainWindow(QWidget):
 
     # ------------------------- TOOLBAR -------------------------
     def create_toolbar(self):
-        icon_path = "assets/icons/"
         buttons = [self.load_btn, self.prev_btn, self.next_btn, self.process_btn, self.save_btn]
         icons = ["open.png", "left.png", "right.png", "yolo.png", "save.png"]
+        icon_path = "assets/icons/"
+
         for b, icon_file in zip(buttons, icons):
             b.setMaximumSize(100, 100)
             b.setMinimumSize(50, 50)
             b.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
-            b.setIcon(QIcon(icon_path + icon_file))
+            b.setIcon(QIcon(resource_path(os.path.join(icon_path, icon_file))))
             b.setIconSize(QSize(64, 64))
             b.setText("")
+
         layout = QVBoxLayout()
         for b in buttons:
             layout.addWidget(b)
         layout.addStretch()
         return layout
 
-    def use_text_tool(self, *args, **kwargs):
-        self.log_msg("Text tool clicked (placeholder)")
+    # ----------------- create_tools -----------------
+    def create_tools(self):
+        # tlačidlá z __init__
+        self.tool_buttons = {
+            ToolType.FREEHAND: self.freehand_btn,
+            ToolType.LINE: self.line_btn,
+            ToolType.WHITE: self.white_btn,
+            ToolType.TEXT: self.text_btn,
+            ToolType.UNDO: self.undo_btn
+        }
 
-    def use_undo_tool(self, *args, **kwargs):
-        self.log_msg("Undo tool clicked (placeholder)")
+        layout = QHBoxLayout()
+        layout.setSpacing(5)
+        layout.setContentsMargins(10, 0, 0, 0)
+
+        for tool_enum, btn in self.tool_buttons.items():
+            props = TOOL_REGISTRY[tool_enum]
+            btn.setIcon(QIcon(resource_path(props["icon"])))
+            btn.setIconSize(QSize(64, 64))
+            btn.setFixedSize(80, 80)
+            btn.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
+
+            btn.clicked.connect(lambda checked=False, t=tool_enum: self.select_tool(t))
+            shortcut = QShortcut(QKeySequence(props["shortcut"]), self)
+            shortcut.activated.connect(lambda t=tool_enum: self.select_tool(t))
+
+            layout.addWidget(btn)
+
+        layout.addStretch()
+        return layout
+
     # ------------------------- TOOL PANEL -------------------------
     def create_tool_panel(self):
-        icon_path = "assets/icons/"
-
-        # Zoznam tlačidiel a ikon
-        tool_buttons = [
-            (self.freehand_btn, "pencil.png"),
-            (self.line_btn, "line.png"),
-            (self.white_btn, "del.png"),
-            (self.text_btn, "text.png"),
-            (self.undo_btn, "undo.png")
-        ]
-
-        # Nastavenie ikon, veľkostí tlačidiel
-        for b, icon_file in tool_buttons:
-            b.setIcon(QIcon(os.path.join(icon_path, icon_file)))
-            b.setIconSize(QSize(64, 64))
-            b.setFixedSize(100, 100)
-
-        # Brush slider
         self.brush_label.setText(f"Brush: {self.brush_size}")
         self.brush_slider.setMinimum(1)
         self.brush_slider.setMaximum(10)
         self.brush_slider.setValue(self.brush_size)
         self.brush_slider.setFixedWidth(150)
 
-        # Layout
         layout = QHBoxLayout()
-        for b, _ in tool_buttons:
-            layout.addWidget(b)
-        layout.addSpacing(20)
+        layout.setSpacing(5)
+        layout.setContentsMargins(10, 0, 0, 0)
+
+        for btn in self.tool_buttons.values():
+            layout.addWidget(btn)
+
         layout.addWidget(self.brush_label)
         layout.addWidget(self.brush_slider)
         layout.addStretch()
-
         return layout
-
     # ------------------------- LOG PANEL -------------------------
     def create_log_panel(self):
         self.log.setMaximumHeight(120)
@@ -179,11 +195,6 @@ class MainWindow(QWidget):
         self.next_btn.clicked.connect(self.next_image)
         self.process_btn.clicked.connect(self.toggle_yolo_auto)
         self.save_btn.clicked.connect(self.save_image)
-        self.freehand_btn.clicked.connect(lambda: self.select_tool("freehand"))
-        self.line_btn.clicked.connect(lambda: self.select_tool("line"))
-        self.white_btn.clicked.connect(lambda: self.select_tool("white"))
-        self.text_btn.clicked.connect(lambda: self.select_tool("text"))
-        self.undo_btn.clicked.connect(lambda: self.select_tool("undo"))
         self.brush_slider.valueChanged.connect(self.update_brush_size)
 
     # ------------------------- LOG -------------------------
@@ -195,12 +206,12 @@ class MainWindow(QWidget):
     def toggle_yolo_auto(self):
         self.yolo_auto = not self.yolo_auto
         if self.yolo_auto:
-            self.process_btn.setIcon(QIcon("assets/icons/yolo_auto.png"))
+            self.process_btn.setIcon(QIcon(resource_path("assets/icons/yolo_auto.png")))
             self.log_msg("YOLO Auto ON")
             if self.cv_image is not None:
                 self._run_yolo_with_loading()
         else:
-            self.process_btn.setIcon(QIcon("assets/icons/yolo.png"))
+            self.process_btn.setIcon(QIcon(resource_path("assets/icons/yolo.png")))
             self.log_msg("YOLO Auto OFF")
 
     def _run_yolo_with_loading(self):
@@ -247,46 +258,43 @@ class MainWindow(QWidget):
         self.image_label.zoom = self.zoom
         self.image_label.redraw()
 
-    # ------------------------- TOOL SELECTION -------------------------
-    def select_tool(self, tool_name):
+    # ------------------------- SELECT TOOL -------------------------
+    def select_tool(self, tool_enum: ToolType):
         dl = self.image_label.drawing_engine
-        if not dl: return
-        if self.current_tool_type == tool_name:
+        if not dl:
+            return
+
+        # Toggle tool
+        if self.current_tool_type == tool_enum:
             self.current_tool_type = None
             self.image_label.drawing_enabled = False
             dl.tool = None
-            self._reset_tool_buttons()
+            self._highlight_button(None)  # zruší highlight
+            # logujeme len keď sa zmení stav
             self.log_msg("No tool active")
             return
 
-        self.current_tool_type = tool_name
+        self.current_tool_type = tool_enum
         self.image_label.drawing_enabled = True
-        dl.tool = tool_name
+        dl.tool = tool_enum
         dl.brush_size = self.brush_size
-        dl.brush_color = (255, 255, 255) if tool_name == "white" else (0, 0, 0)
-        dl.drawing = False
-        dl.start_point = None
-        dl.line_start = None
-        dl.preview_line = None
+        dl.brush_color = (255, 255, 255) if tool_enum == ToolType.WHITE else (0, 0, 0)
 
-        self._reset_tool_buttons()
-        self._highlight_button(tool_name)
-        self.log_msg(f"Selected tool: {tool_name}")
+        self._highlight_button(tool_enum)
+        self.log_msg(f"Selected tool: {tool_enum.name}")
 
+    # ------------------------- RESET BUTTONS -------------------------
     def _reset_tool_buttons(self):
-        for b in [self.freehand_btn, self.line_btn, self.white_btn, self.text_btn, self.undo_btn]:
-            b.setStyleSheet("")
+        for btn in self.tool_buttons.values():
+            btn.setStyleSheet("")
 
-    def _highlight_button(self, tool_name):
-        btn_map = {
-            "freehand": self.freehand_btn,
-            "line": self.line_btn,
-            "white": self.white_btn,
-            "text": self.text_btn,
-            "undo": self.undo_btn
-        }
-        if tool_name in btn_map:
-            btn_map[tool_name].setStyleSheet("background-color: lightblue")
+    # ------------------------- HIGHLIGHT BUTTON -------------------------
+    def _highlight_button(self, tool_enum):
+        for t, btn in self.tool_buttons.items():
+            if t == tool_enum:
+                btn.setStyleSheet("background-color: lightblue;")
+            else:
+                btn.setStyleSheet("")
 
     # ------------------------- BRUSH -------------------------
     def update_brush_size(self, value):
@@ -297,17 +305,27 @@ class MainWindow(QWidget):
         self.log_msg(f"Brush size set to {value}")
 
     # ------------------------- LOAD / NAVIGATION -------------------------
+
+
     def load_folder(self):
-        folder = QFileDialog.getExistingDirectory(self, "Select Folder", self.last_folder)
-        if not folder: return
-        self.last_folder = folder
+        folder = QFileDialog.getExistingDirectory(self, "Select Folder", self.last_folder or "")
+        if not folder:
+            return
+
+        # absolutna cesta a Path objekt pre správne diakritiku
+        folder_path = Path(folder).resolve()
+        self.last_folder = str(folder_path)
+
+        # načítanie obrázkov
         self.image_paths = [
-            os.path.join(folder, f) for f in sorted(os.listdir(folder))
+            str(folder_path / f) for f in sorted(os.listdir(folder_path))
             if f.lower().endswith((".jpg", ".jpeg", ".png"))
         ]
+
         if not self.image_paths:
             self.log_msg("No images found")
             return
+
         self.current_index = 0
         self.load_image()
 
@@ -316,8 +334,9 @@ class MainWindow(QWidget):
         try:
             data = np.frombuffer(open(path, "rb").read(), np.uint8)
             self.cv_image = cv2.imdecode(data, cv2.IMREAD_COLOR)
-        except:
-            self.log_msg(f"Failed loading {path}")
+        except Exception as e:
+            self.log_msg(f"Failed loading image: {path}")
+            self.log_msg(f"Failed loading image: {e}")
             return
 
         self.boxes = []
@@ -395,6 +414,7 @@ class MainWindow(QWidget):
         view_h = self.image_label.parent().height()
         self.zoom = min(view_w / img_w, view_h / img_h)
 
+    # ----------------- resize event -----------------
     def resizeEvent(self, event):
         self.fit_zoom()
         self.redraw()
@@ -402,17 +422,16 @@ class MainWindow(QWidget):
 
 # ------------------------- MAIN -------------------------
 if __name__ == "__main__":
+    ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID("YoloCAT")
     app = QApplication(sys.argv)
 
     # ---------- Load YOLO model ----------
-    model_path = os.path.join("models", "best.pt")
+    model_path = resource_path("models/best.pt")
     yolo = YoloProcessor(model_path)
-    print("Loading YOLO model...(MAIN)")
     yolo.load_model()
-    print("YOLO model loaded! (MAIN)")
+    print(f"Loaded YOLO model from: {model_path}")
 
     # ---------- Start main window ----------
     window = MainWindow(yolo)
     window.show()
-
     sys.exit(app.exec())

@@ -1,4 +1,5 @@
 import cv2
+from tools.tool_types import ToolType
 
 class DrawingEngine:
     def __init__(self, cv_img=None, log_callback=None):
@@ -17,10 +18,10 @@ class DrawingEngine:
     # ------------------------- DRAWING -------------------------
     def start_draw(self, x, y):
         self.drawing = True
-        if self.tool in ["freehand", "white"]:
+        if self.tool in [ToolType.FREEHAND, ToolType.WHITE]:
             self.start_point = (x, y)
             self._log(f"Start {self.tool} at {self.start_point}")
-        elif self.tool == "line":
+        elif self.tool == ToolType.LINE:
             self.line_start = (x, y)
             self.preview_line = (self.line_start, self.line_start)
             self._log(f"Line start at {self.line_start}")
@@ -29,8 +30,8 @@ class DrawingEngine:
         if not self.drawing or self.tool is None or self.cv_img is None:
             return
 
-        if self.tool in ["freehand", "white"]:
-            color = self.brush_color if self.tool == "freehand" else (255, 255, 255)
+        if self.tool in [ToolType.FREEHAND, ToolType.WHITE]:
+            color = self.brush_color if self.tool == ToolType.FREEHAND else (255, 255, 255)
             cv2.line(
                 self.cv_img,
                 self.start_point,
@@ -42,14 +43,19 @@ class DrawingEngine:
             self.start_point = (x, y)
             self._log(f"{self.tool} at {self.start_point}")
 
-        elif self.tool == "line":
+
+        elif self.tool == ToolType.LINE:
+
+            if self.line_start is None:
+                return
+
             self.preview_line = (self.line_start, (x, y))
             self._log(f"Preview line updated: {self.preview_line}")
 
     def end_draw(self, x, y):
         if not self.drawing or self.tool is None:
             return
-        if self.tool == "line":
+        if self.tool == ToolType.LINE:
             cv2.line(self.cv_img, self.line_start, (x, y), self.brush_color, self.brush_size, cv2.LINE_8)
             self.preview_line = None
             self._log(f"Line end at {(x,y)}")

@@ -1,16 +1,8 @@
-from enum import Enum, auto
-
+from enum import Enum
 
 class ToolType(Enum):
-
-    NONE = auto()
-
-    FREEHAND = auto()
-
-    LINE = auto()
-
-    WHITE = auto()
-
-    TEXT = auto()
-
-    UNDO = auto()
+    FREEHAND = "freehand"
+    LINE = "line"
+    WHITE = "white"
+    TEXT = "text"
+    UNDO = "undo"
