@@ -1,31 +1,55 @@
-from PyQt6.QtWidgets import QApplication, QWidget, QPushButton
-from tools.tool_registry import TOOL_REGISTRY
-from tools.tool_types import ToolType
-from gui_main import MainWindow  # tvoja trieda MainWindow
+import cv2
+import numpy as np
 
-app = QApplication([])
+img = np.ones((600,900,3),dtype=np.uint8)*255
+points = []
 
-window = MainWindow(None)  # YOLO model nie je potrebný
-dummy_parent = QWidget()  # parent pre headless tlačidlá
+def catmull_rom(p0,p1,p2,p3,t):
+    t2 = t*t
+    t3 = t2*t
+    return (
+        0.5*((2*p1) +
+        (-p0+p2)*t +
+        (2*p0-5*p1+4*p2-p3)*t2 +
+        (-p0+3*p1-3*p2+p3)*t3)
+    )
 
-# naplni tool_buttons
-window.tool_buttons = {}
-for tool_enum, props in TOOL_REGISTRY.items():
-    btn = QPushButton(dummy_parent)  # parent je nutný, aby nepadlo
-    btn.setStyleSheet("")
-    window.tool_buttons[tool_enum] = btn
+def draw_curve():
+    if len(points) < 4:
+        return
 
-# test highlight
-for tool_enum in TOOL_REGISTRY.keys():
-    print(f"Selecting {tool_enum.name}")
-    window.select_tool(tool_enum)
-    for t, btn in window.tool_buttons.items():
-        state = "highlighted" if "lightblue" in btn.styleSheet() else "normal"
-        print(f"  {t.name}: {state}")
+    for i in range(len(points)-3):
+        p0=np.array(points[i])
+        p1=np.array(points[i+1])
+        p2=np.array(points[i+2])
+        p3=np.array(points[i+3])
 
-# toggle off
-print("Toggling tool off")
-window.select_tool(list(TOOL_REGISTRY.keys())[0])
-for t, btn in window.tool_buttons.items():
-    state = "highlighted" if "lightblue" in btn.styleSheet() else "normal"
-    print(f"  {t.name}: {state}")
+        prev=None
+        for t in np.linspace(0,1,50):
+            pt=catmull_rom(p0,p1,p2,p3,t)
+            pt=(int(pt[0]),int(pt[1]))
+
+            if prev is not None:
+                cv2.line(img,prev,pt,(0,0,0),2)
+
+            prev=pt
+
+def mouse(event,x,y,flags,param):
+    if event==cv2.EVENT_LBUTTONDOWN:
+        points.append((x,y))
+        cv2.circle(img,(x,y),4,(0,0,255),-1)
+        draw_curve()
+
+    if event==cv2.EVENT_RBUTTONDOWN:
+        points.clear()
+        img[:]=255
+
+cv2.namedWindow("Curve test")
+cv2.setMouseCallback("Curve test",mouse)
+
+while True:
+    cv2.imshow("Curve test",img)
+    if cv2.waitKey(1)==27:
+        break
+
+cv2.destroyAllWindows()

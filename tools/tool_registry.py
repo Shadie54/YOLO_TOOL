@@ -1,7 +1,11 @@
+# tool_registry.py
+
+from enum import Enum, auto
 from tools.tool_types import ToolType
 
 ICON_PATH = "assets/icons/"
 
+# ------------------------- DRAW TOOLS -------------------------
 TOOL_REGISTRY = {
     ToolType.FREEHAND: {
         "icon": ICON_PATH + "pencil.png",
@@ -20,12 +24,30 @@ TOOL_REGISTRY = {
     },
     ToolType.TEXT: {
         "icon": ICON_PATH + "text.png",
-        "tooltip": "Insert text (WORK IN PROGRESS)",
+        "tooltip": "Insert text",
         "shortcut": "T",
     },
     ToolType.UNDO: {
         "icon": ICON_PATH + "undo.png",
-        "tooltip": "Undo last action (WORK IN PROGRESS)",
+        "tooltip": "Undo last action",
         "shortcut": "Ctrl+Z",
     },
+}
+
+# ------------------------- MAIN TOOLBAR -------------------------
+class MainToolbar(Enum):
+    OPEN = auto()
+    YOLO = auto()
+    PREV = auto()
+    NEXT = auto()
+    SAVE = auto()
+    LOG = auto()
+
+MAIN_TOOLBAR_REGISTRY = {
+    MainToolbar.OPEN:  {"icon": "open.png", "tooltip": "Open folder (Ctrl+O)", "callback": "load_folder"},
+    MainToolbar.YOLO:  {"icon": "yolo.png", "tooltip": "OFF/ON Auto YOLO detection", "callback": "toggle_yolo_auto"},
+    MainToolbar.PREV:  {"icon": "left.png", "tooltip": "Previous image", "callback": "prev_image"},
+    MainToolbar.NEXT:  {"icon": "right.png", "tooltip": "Next image", "callback": "next_image"},
+    MainToolbar.SAVE:  {"icon": "save.png", "tooltip": "Save image (Ctrl+S)", "callback": "save_image"},
+    MainToolbar.LOG:   {"icon": "log.png", "tooltip": "Show / Hide log panel", "callback": "toggle_log"},
 }

@@ -4,59 +4,62 @@ import sys
 import cv2
 import ctypes
 import numpy as np
+from pathlib import Path
+
 from PyQt6.QtWidgets import (
     QApplication, QWidget, QPushButton, QVBoxLayout, QHBoxLayout,
     QScrollArea, QTextEdit, QFileDialog, QSlider, QLabel, QSizePolicy, QSplitter
 )
 from PyQt6.QtGui import QIcon, QShortcut, QKeySequence
 from PyQt6.QtCore import Qt, QSize
+
 from canvas.image_canvas import ImageCanvas
 from yolo.yolo_processor import YoloProcessor
 from tools.delete_tools import DeleteTool
-from tools.tool_registry import TOOL_REGISTRY
+from tools.tool_registry import MAIN_TOOLBAR_REGISTRY, TOOL_REGISTRY, MainToolbar, ICON_PATH
 from tools.tool_types import ToolType
-from pathlib import Path
 
 # ------------------------- RESOURCE PATH -------------------------
 def resource_path(relative_path: str) -> str:
     """Vracia cestu k zdroju, funguje lokálne aj v EXE."""
     try:
-        # PyInstaller onedir/onefile
         base_path = sys._MEIPASS
     except AttributeError:
         base_path = os.path.abspath(".")
     return os.path.join(base_path, relative_path)
-class MainWindow(QWidget):
 
+# ------------------------- MAIN WINDOW -------------------------
+class MainWindow(QWidget):
     def __init__(self, yolo_processor):
-        self.yolo = yolo_processor
         super().__init__()
-        self.setWindowTitle("YoloCAT - interaktívny nástroj na miestopisy")
+        self.setWindowTitle("YoloCAT v1.0 - interaktívny nástroj na miestopisy")
         self.resize(1400, 1000)
         self.setWindowIcon(QIcon(resource_path("assets/icons/yolocat.ico")))
-        # ------------------------- MODEL -------------------------
-        self.yolo = yolo
+
+        # YOLO
+        self.yolo = yolo_processor
         self.yolo_auto = False
 
-        # ------------------------- IMAGE -------------------------
+        # IMAGE
         self.cv_image = None
         self.boxes = []
         self.deleted_boxes = []
         self.hover_box = None
         self.zoom = 1.0
 
-        # ------------------------- TOOLS -------------------------
+        # TOOLS
         self.current_tool_type = None
         self.brush_size = 1
         self.brush_color = (0, 0, 0)
         self.shortcuts = []
-        self.tool_buttons = {} #TOOL BUTTONS
-        # ------------------------- FOLDER -------------------------
+        self.tool_buttons = {}
+
+        # FOLDER
         self.image_paths = []
         self.current_index = 0
         self.last_folder = ""
 
-        # ------------------------- WIDGETS -------------------------
+        # WIDGETS
         self.load_btn = QPushButton()
         self.prev_btn = QPushButton()
         self.next_btn = QPushButton()
@@ -77,53 +80,53 @@ class MainWindow(QWidget):
         self.build_gui()
 
     # ------------------------- BUILD GUI -------------------------
+    # ------------------------- BUILD GUI -------------------------
     def build_gui(self):
-        # ---------------- IMAGE ----------------
         self.image_label = ImageCanvas()
         self.image_label.log_callback = self.log_msg
         self.image_label.click_callback = self.on_click
         self.image_label.move_callback = self.on_mouse_move
         self.image_label.release_callback = self.on_mouse_release
 
+        # label pre zobrazenie cesty k súboru
+        self.path_label = QLabel()
+        self.path_label.setStyleSheet("font-weight: bold;")
+        self.path_label.setWordWrap(True)
+
         scroll = self.create_scroll_area(self.image_label)
 
-        # ---------------- TOOLBAR ----------------
-        toolbar_layout = self.create_toolbar()
+        # nový wrapper widget pre label + scroll
+        scroll_layout = QVBoxLayout()
+        scroll_layout.setContentsMargins(0, 0, 0, 0)
+        scroll_layout.setSpacing(5)
+        scroll_widget = QWidget()
+        scroll_widget.setLayout(scroll_layout)
+        scroll_layout.addWidget(self.path_label)
+        scroll_layout.addWidget(scroll)
 
-        # ---------------- TOOLS PANEL ----------------
+        toolbar_layout = self.create_toolbar()
         self.create_tools()
         tool_panel_layout = self.create_tool_panel()
-
-        # zabaliť tools panel do QWidget (QSplitter podporuje len widgety)
         tools_widget = QWidget()
         tools_widget.setLayout(tool_panel_layout)
 
-        # ---------------- LOG ----------------
         log_widget = self.create_log_panel()
 
-        # ---------------- SPLITTER (image + tools + log) ----------------
         self.image_log_splitter = QSplitter(Qt.Orientation.Vertical)
-        self.image_log_splitter.addWidget(scroll)  # obrázok
-        self.image_log_splitter.addWidget(tools_widget)  # tools ikonky
-        self.image_log_splitter.addWidget(log_widget)  # log panel
-
-        # počiatočné veľkosti (image, tools, log)
+        self.image_log_splitter.addWidget(scroll_widget)
+        self.image_log_splitter.addWidget(tools_widget)
+        self.image_log_splitter.addWidget(log_widget)
         self.image_log_splitter.setSizes([800, 120, 80])
-
-        # tools panel nechce collapse
         self.image_log_splitter.setCollapsible(1, False)
 
-        # ---------------- RIGHT SIDE ----------------
         right_layout = QVBoxLayout()
         right_layout.addWidget(self.image_log_splitter)
 
-        # ---------------- MAIN LAYOUT ----------------
         main_layout = QHBoxLayout()
-        main_layout.addLayout(toolbar_layout)  # ľavý panel
-        main_layout.addLayout(right_layout)  # pravá časť
+        main_layout.addLayout(toolbar_layout)
+        main_layout.addLayout(right_layout)
         self.setLayout(main_layout)
 
-        # ---------------- SIGNALS ----------------
         self.connect_signals()
         self.delete_tool = DeleteTool(self.image_label)
 
@@ -137,41 +140,41 @@ class MainWindow(QWidget):
 
     # ------------------------- TOOLBAR -------------------------
     def create_toolbar(self):
-        icon_path = "assets/icons/"
-        buttons = [self.load_btn, self.process_btn, self.prev_btn, self.next_btn, self.save_btn, self.log_btn]
-
-        icons = ["open.png", "yolo.png", "left.png", "right.png", "save.png", "log.png"]
-
-        tooltips = [
-            "Open folder (Ctrl+O)",
-            "OFF/ON Auto YOLO detection",
-            "Previous image",
-            "Next image",
-            "Save image (Ctrl+S)",
-            "Show / Hide log panel"
-        ]
-
-        for b, icon_file, tip in zip(buttons, icons, tooltips):
-            b.setMaximumSize(100, 100)
-            b.setMinimumSize(50, 50)
-            b.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
-
-            b.setIcon(QIcon(resource_path(icon_path + icon_file)))
-            b.setIconSize(QSize(64, 64))
-            b.setText("")
-
-            b.setToolTip(tip)
-
         layout = QVBoxLayout()
-        for b in buttons:
-            layout.addWidget(b)
+        for tool_enum, props in MAIN_TOOLBAR_REGISTRY.items():
+            btn_name = f"{tool_enum.name.lower()}_btn"
+            btn = getattr(self, btn_name, None)
+            if not btn:
+                btn = QPushButton()
+                setattr(self, btn_name, btn)
+
+            # priradenie YOLO a LOG buttonov
+            if tool_enum == MainToolbar.YOLO:
+                self.process_btn = btn
+            if tool_enum == MainToolbar.LOG:
+                self.log_btn = btn
+
+            icon_file = str(resource_path(ICON_PATH + props["icon"]))
+            btn.setIcon(QIcon(icon_file))
+            btn.setIconSize(QSize(64, 64))
+            btn.setToolTip(props["tooltip"])
+            btn.setFixedSize(80, 80)
+            btn.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
+
+            # odpojenie starých signálov
+            try:
+                btn.clicked.disconnect()
+            except TypeError:
+                pass
+            btn.clicked.connect(getattr(self, props["callback"]))
+
+            layout.addWidget(btn)
 
         layout.addStretch()
         return layout
 
-    # ----------------- create_tools -----------------
+    # ------------------------- TOOLS -------------------------
     def create_tools(self):
-        # tlačidlá z __init__
         self.tool_buttons = {
             ToolType.FREEHAND: self.freehand_btn,
             ToolType.LINE: self.line_btn,
@@ -189,10 +192,16 @@ class MainWindow(QWidget):
             btn.setIcon(QIcon(resource_path(props["icon"])))
             btn.setIconSize(QSize(64, 64))
             btn.setFixedSize(80, 80)
-            btn.setToolTip(f'{props["tooltip"]} ({props["shortcut"]})') # pripojenie tooltipov z tool_registry.py
+            btn.setToolTip(f'{props["tooltip"]} ({props["shortcut"]})')
             btn.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
 
+            # pripoj callback len raz
+            try:
+                btn.clicked.disconnect()
+            except TypeError:
+                pass
             btn.clicked.connect(lambda checked=False, t=tool_enum: self.select_tool(t))
+
             shortcut = QShortcut(QKeySequence(props["shortcut"]), self)
             shortcut.activated.connect(lambda t=tool_enum: self.select_tool(t))
             self.shortcuts.append(shortcut)
@@ -221,6 +230,7 @@ class MainWindow(QWidget):
         layout.addWidget(self.brush_slider)
         layout.addStretch()
         return layout
+
     # ------------------------- LOG PANEL -------------------------
     def create_log_panel(self):
         self.log.setMaximumHeight(120)
@@ -229,69 +239,89 @@ class MainWindow(QWidget):
 
     # ------------------------- SIGNALS -------------------------
     def connect_signals(self):
-        self.load_btn.clicked.connect(self.load_folder)
-        self.prev_btn.clicked.connect(self.prev_image)
-        self.next_btn.clicked.connect(self.next_image)
-        self.process_btn.clicked.connect(self.toggle_yolo_auto)
-        self.save_btn.clicked.connect(self.save_image)
         self.brush_slider.valueChanged.connect(self.update_brush_size)
-        self.log_btn.clicked.connect(self.toggle_log)
 
     # ------------------------- LOG -------------------------
     def log_msg(self, msg):
         print(msg)
         self.log.append(msg)
 
+    # ------------------------- TOGGLE LOG PANEL -------------------------
     def toggle_log(self):
-        self.log.setVisible(not self.log.isVisible())
+        idx = self.image_log_splitter.indexOf(self.log)
+        sizes = self.image_log_splitter.sizes()
+        if sizes[idx] == 0:
+            sizes[idx] = 120
+            self.log.setVisible(True)
+            if not getattr(self, "_log_visible_last", None):
+                self.log_msg("Log panel shown")
+                self._log_visible_last = True
+        else:
+            sizes[idx] = 0
+            self.log.setVisible(False)
+            if getattr(self, "_log_visible_last", None) != False:
+                self.log_msg("Log panel hidden")
+                self._log_visible_last = False
+        self.image_log_splitter.setSizes(sizes)
 
-    # ------------------------- YOLO AUTO -------------------------
+    # ------------------------- YOLO -------------------------
     def toggle_yolo_auto(self):
         self.yolo_auto = not self.yolo_auto
+        btn = self.process_btn
         if self.yolo_auto:
-            self.process_btn.setIcon(QIcon(resource_path("assets/icons/yolo_auto.png")))
+            btn.setIcon(QIcon(str(resource_path(ICON_PATH + "yolo_auto.png"))))
             self.log_msg("YOLO Auto ON")
             if self.cv_image is not None:
-                self._run_yolo_with_loading()
+                self._run_yolo_with_loading()  # <-- overlay loading screen
         else:
-            self.process_btn.setIcon(QIcon(resource_path("assets/icons/yolo.png")))
+            btn.setIcon(QIcon(str(resource_path(ICON_PATH + "yolo.png"))))
             self.log_msg("YOLO Auto OFF")
 
     def _run_yolo_with_loading(self):
         """Spustí YOLO detekciu a zobrazí loading overlay počas spracovania."""
-        loading_label = QLabel("YOLO is running...")
+        loading_label = QLabel("YOLO is running...", self)
         loading_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         loading_label.setStyleSheet("background-color: rgba(0,0,0,0.6); color: white; font-size: 24px;")
-        loading_label.setParent(self)
         loading_label.resize(self.width(), self.height())
         loading_label.show()
         QApplication.processEvents()
 
-        # --------- spustenie detekcie synchronne ----------
+        # spustenie detekcie synchronne
         self.process_image()
 
-        # --------- skryť loading ----------
+        # skryť overlay
         loading_label.hide()
         loading_label.deleteLater()
 
-    # ------------------------- YOLO PROCESS -------------------------
-    def process_image(self):
+    # ------------------------- SAVE IMAGE -------------------------
+    def save_image(self):
         if self.cv_image is None:
             return
 
-        self.log_msg("Running YOLO...")
-        results = self.yolo.model(self.cv_image)[0]
+        folder = Path(self.image_paths[self.current_index]).parent
+        folder_name = folder.name
 
-        self.boxes = []
-        for i, box in enumerate(results.boxes.xyxy.cpu().numpy()):
-            cls = int(results.boxes.cls[i].cpu().numpy())
-            x1, y1, x2, y2 = map(int, box)
-            if cls == 1:
-                x2 = int(x1 + (x2 - x1) * 2.5)
-            self.boxes.append((x1, y1, x2, y2, cls))
+        out_folder = folder / folder_name
+        out_folder.mkdir(exist_ok=True)
 
+        filename = Path(self.image_paths[self.current_index]).name
+        save_path = out_folder / filename
+
+        cv2.imwrite(str(save_path), self.cv_image)
+        self.log_msg(f"Saved: {save_path}")
+
+    # ------------------------- FIT ZOOM -------------------------
+    def fit_zoom(self):
+        if self.cv_image is None: return
+        img_h, img_w = self.cv_image.shape[:2]
+        view_w = self.image_label.parent().width()
+        view_h = self.image_label.parent().height()
+        self.zoom = min(view_w / img_w, view_h / img_h)
+
+    def fit_to_window(self):
+        self.fit_zoom()
         self.redraw()
-        self.log_msg(f"Detections: {len(self.boxes)}")
+        self.log_msg("Zoom: Fit to window")
 
     # ------------------------- REDRAW -------------------------
     def redraw(self):
@@ -307,13 +337,11 @@ class MainWindow(QWidget):
         if not dl:
             return
 
-        # Toggle tool
         if self.current_tool_type == tool_enum:
             self.current_tool_type = None
             self.image_label.drawing_enabled = False
             dl.tool = None
-            self._highlight_button(None)  # zruší highlight
-            # logujeme len keď sa zmení stav
+            self._highlight_button(None)
             self.log_msg("No tool active")
             return
 
@@ -326,12 +354,6 @@ class MainWindow(QWidget):
         self._highlight_button(tool_enum)
         self.log_msg(f"Selected tool: {tool_enum.name}")
 
-    # ------------------------- RESET BUTTONS -------------------------
-    def _reset_tool_buttons(self):
-        for btn in self.tool_buttons.values():
-            btn.setStyleSheet("")
-
-    # ------------------------- HIGHLIGHT BUTTON -------------------------
     def _highlight_button(self, tool_enum):
         for t, btn in self.tool_buttons.items():
             if t == tool_enum:
@@ -339,7 +361,6 @@ class MainWindow(QWidget):
             else:
                 btn.setStyleSheet("")
 
-    # ------------------------- BRUSH -------------------------
     def update_brush_size(self, value):
         self.brush_size = value
         self.brush_label.setText(f"Brush: {value}")
@@ -348,23 +369,17 @@ class MainWindow(QWidget):
         self.log_msg(f"Brush size set to {value}")
 
     # ------------------------- LOAD / NAVIGATION -------------------------
-
-
     def load_folder(self):
         folder = QFileDialog.getExistingDirectory(self, "Select Folder", self.last_folder or "")
-        if not folder:
-            return
+        if not folder: return
 
-        # absolutna cesta a Path objekt pre správne diakritiku
         folder_path = Path(folder).resolve()
         self.last_folder = str(folder_path)
 
-        # načítanie obrázkov
         self.image_paths = [
             str(folder_path / f) for f in sorted(os.listdir(folder_path))
             if f.lower().endswith((".jpg", ".jpeg", ".png"))
         ]
-
         if not self.image_paths:
             self.log_msg("No images found")
             return
@@ -374,12 +389,13 @@ class MainWindow(QWidget):
 
     def load_image(self):
         path = self.image_paths[self.current_index]
+        self.path_label.setText(path)
         try:
             data = np.frombuffer(open(path, "rb").read(), np.uint8)
             self.cv_image = cv2.imdecode(data, cv2.IMREAD_COLOR)
         except Exception as e:
             self.log_msg(f"Failed loading image: {path}")
-            self.log_msg(f"Failed loading image: {e}")
+            self.log_msg(str(e))
             return
 
         self.boxes = []
@@ -387,12 +403,10 @@ class MainWindow(QWidget):
         self.hover_box = None
         self.fit_zoom()
         self.image_label.set_image(self.cv_image)
-
         if self.yolo_auto:
             self.process_image()
         else:
             self.redraw()
-
         self.log_msg(f"Loaded: {path}")
 
     def prev_image(self):
@@ -405,7 +419,7 @@ class MainWindow(QWidget):
         self.current_index = min(len(self.image_paths) - 1, self.current_index + 1)
         self.load_image()
 
-    # ------------------------- MOUSE EVENTS -------------------------
+    # ------------------------- MOUSE -------------------------
     def on_click(self, event):
         if self.cv_image is None or not self.boxes: return
         x = int(event.position().x() / self.zoom)
@@ -430,23 +444,24 @@ class MainWindow(QWidget):
     def on_mouse_release(self, event):
         pass
 
-    # ------------------------- SAVE -------------------------
-    def save_image(self):
+    # ------------------------- YOLO PROCESS -------------------------
+    def process_image(self):
         if self.cv_image is None:
             return
 
-        folder = Path(self.image_paths[self.current_index]).parent
-        folder_name = folder.name
+        self.log_msg("Running YOLO...")
+        results = self.yolo.model(self.cv_image)[0]
 
-        out_folder = folder / folder_name
-        out_folder.mkdir(exist_ok=True)
+        self.boxes = []
+        for i, box in enumerate(results.boxes.xyxy.cpu().numpy()):
+            cls = int(results.boxes.cls[i].cpu().numpy())
+            x1, y1, x2, y2 = map(int, box)
+            if cls == 1:
+                x2 = int(x1 + (x2 - x1) * 2.5)
+            self.boxes.append((x1, y1, x2, y2, cls))
 
-        filename = Path(self.image_paths[self.current_index]).name
-        save_path = out_folder / filename
-
-        cv2.imwrite(str(save_path), self.cv_image)
-
-        self.log_msg(f"Saved: {save_path}")
+        self.redraw()
+        self.log_msg(f"Detections: {len(self.boxes)}")
 
     # ------------------------- ZOOM -------------------------
     def wheelEvent(self, event):
@@ -456,71 +471,21 @@ class MainWindow(QWidget):
         self.zoom = max(0.2, min(self.zoom, 5))
         self.redraw()
 
-    # ------------------------- FIT / RESIZE -------------------------
-    def fit_zoom(self):
-        if self.cv_image is None: return
-        img_h, img_w = self.cv_image.shape[:2]
-        view_w = self.image_label.parent().width()
-        view_h = self.image_label.parent().height()
-        self.zoom = min(view_w / img_w, view_h / img_h)
-
-    # ----------------- resize event -----------------
     def resizeEvent(self, event):
         self.fit_zoom()
         self.redraw()
         super().resizeEvent(event)
 
-    def create_global_shortcuts(self):
-
-        # SPACE → fit zoom
-        sc = QShortcut(QKeySequence("Space"), self)
-        sc.setContext(Qt.ShortcutContext.ApplicationShortcut)
-        sc.activated.connect(self.fit_to_window)
-        self.shortcuts.append(sc)
-
-        # CTRL + O → open folder
-        sc = QShortcut(QKeySequence("Ctrl+O"), self)
-        sc.setContext(Qt.ShortcutContext.ApplicationShortcut)
-        sc.activated.connect(self.load_folder)
-        self.shortcuts.append(sc)
-
-        # CTRL + Z → undo
-        #sc = QShortcut(QKeySequence("Ctrl+Z"), self)
-        #sc.setContext(Qt.ShortcutContext.ApplicationShortcut)
-        #sc.activated.connect(self.fit_to_window)
-        #self.shortcuts.append(sc)
-
-        # CTRL + S → save image
-        sc = QShortcut(QKeySequence("Ctrl+S"), self)
-        sc.setContext(Qt.ShortcutContext.ApplicationShortcut)
-        sc.activated.connect(self.save_image)
-        self.shortcuts.append(sc)
-
-    # ----------------- SPACE shortcut to reset image zoom method -----------------
-    def fit_to_window(self):
-        if self.cv_image is None:
-            return
-
-        # prepocitaj zoom podľa veľkosti scroll area
-        self.fit_zoom()
-
-        # prekresli canvas
-        self.redraw()
-
-        # voliteľný log
-        self.log_msg("Zoom: Fit to window")
 # ------------------------- MAIN -------------------------
 if __name__ == "__main__":
     ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID("YoloCAT")
     app = QApplication(sys.argv)
 
-    # ---------- Load YOLO model ----------
     model_path = resource_path("models/best.pt")
     yolo = YoloProcessor(model_path)
     yolo.load_model()
     print(f"Loaded YOLO model from: {model_path}")
 
-    # ---------- Start main window ----------
     window = MainWindow(yolo)
     window.show()
     sys.exit(app.exec())
