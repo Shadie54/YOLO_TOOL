@@ -67,7 +67,7 @@ def redraw():
 
 
 def mouse(event, x, y, flags, param):
-    global preview, points, canvas
+    global preview, points
 
     if event == cv2.EVENT_MOUSEMOVE:
         preview = (x, y)
@@ -76,14 +76,14 @@ def mouse(event, x, y, flags, param):
         points.append((x, y))
 
     if event == cv2.EVENT_RBUTTONDOWN:
-        points.clear()
+        if points:
+            points.pop()  # pravé tlačidlo -> zmazať posledný bod
 
 
 cv2.namedWindow("Curve Tool Test")
 cv2.setMouseCallback("Curve Tool Test", mouse)
 
 while True:
-
     img = redraw()
     cv2.imshow("Curve Tool Test", img)
 
@@ -93,15 +93,14 @@ while True:
         draw_curve(canvas, points)
         points.clear()
 
-    if key == 26:  # CTRL+Z
+    if key == 26:  # CTRL+Z -> undo posledného bodu
         if points:
             points.pop()
 
-    if key == 27:  # ESC
+    if key == 27:  # ESC -> zrušiť krivku
         points.clear()
 
     if key == ord("q"):
         break
-
 
 cv2.destroyAllWindows()

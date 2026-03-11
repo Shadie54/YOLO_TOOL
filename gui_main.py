@@ -68,6 +68,8 @@ class MainWindow(QWidget):
         self.log_btn = QPushButton()
         self.freehand_btn = QPushButton()
         self.line_btn = QPushButton()
+        self.curve_btn = QPushButton()
+        self.polycurve_btn = QPushButton()
         self.white_btn = QPushButton()
         self.text_btn = QPushButton()
         self.undo_btn = QPushButton()
@@ -178,6 +180,8 @@ class MainWindow(QWidget):
         self.tool_buttons = {
             ToolType.FREEHAND: self.freehand_btn,
             ToolType.LINE: self.line_btn,
+            ToolType.CURVE: self.curve_btn,
+            ToolType.POLYCURVE: self.polycurve_btn,
             ToolType.WHITE: self.white_btn,
             ToolType.TEXT: self.text_btn,
             ToolType.UNDO: self.undo_btn

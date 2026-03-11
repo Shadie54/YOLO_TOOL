@@ -24,6 +24,10 @@ class ImageCanvas(QLabel):
         self.move_callback = None
         self.release_callback = None
         self.log_callback = None
+        # curve + polycurve
+        self.curve_points = []  # pre CURVE
+        self.polycurve_points = []  # pre POLYCURVE
+        self.preview_point = None  # pre vizualizáciu pri pohybe myši
 
         self.setMouseTracking(True)
 
