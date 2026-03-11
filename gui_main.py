@@ -341,6 +341,7 @@ class MainWindow(QWidget):
         if not dl:
             return
 
+        # zrušenie aktuálneho nástroja, ak klikneme na ten istý
         if self.current_tool_type == tool_enum:
             self.current_tool_type = None
             self.image_label.drawing_enabled = False
@@ -351,10 +352,28 @@ class MainWindow(QWidget):
 
         self.current_tool_type = tool_enum
         self.image_label.drawing_enabled = True
-        dl.tool = tool_enum
-        dl.brush_size = self.brush_size
-        dl.brush_color = (255, 255, 255) if tool_enum == ToolType.WHITE else (0, 0, 0)
 
+        # --------- nastavenie DrawingEngine pre klasické kreslenie ---------
+        if tool_enum in [ToolType.FREEHAND, ToolType.LINE, ToolType.WHITE, ToolType.TEXT, ToolType.UNDO]:
+            dl.tool = tool_enum
+            dl.brush_size = self.brush_size
+            dl.brush_color = (255, 255, 255) if tool_enum == ToolType.WHITE else (0, 0, 0)
+
+        # --------- Curve / PolyCurve ---------
+        elif tool_enum == ToolType.CURVE:
+            dl.tool = tool_enum
+            dl.curve_points.clear()
+            dl.preview_point = None
+            # môžeme pre istotu prepojiť log_callback
+            self.image_label.curve_tool.log_callback = self.image_label.log_callback
+
+        elif tool_enum == ToolType.POLYCURVE:
+            dl.tool = tool_enum
+            dl.polycurve_points.clear()
+            dl.preview_point = None
+            self.image_label.polycurve_tool.log_callback = self.image_label.log_callback
+
+        # zvýraznenie tlačidla
         self._highlight_button(tool_enum)
         self.log_msg(f"Selected tool: {tool_enum.name}")
 
