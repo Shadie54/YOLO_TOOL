@@ -6,7 +6,7 @@ import ctypes
 import numpy as np
 from PyQt6.QtWidgets import (
     QApplication, QWidget, QPushButton, QVBoxLayout, QHBoxLayout,
-    QScrollArea, QTextEdit, QFileDialog, QSlider, QLabel, QSizePolicy
+    QScrollArea, QTextEdit, QFileDialog, QSlider, QLabel, QSizePolicy, QSplitter
 )
 from PyQt6.QtGui import QIcon, QShortcut, QKeySequence
 from PyQt6.QtCore import Qt, QSize
@@ -62,6 +62,7 @@ class MainWindow(QWidget):
         self.next_btn = QPushButton()
         self.process_btn = QPushButton()  # YOLO / YOLO Auto
         self.save_btn = QPushButton()
+        self.log_btn = QPushButton()
         self.freehand_btn = QPushButton()
         self.line_btn = QPushButton()
         self.white_btn = QPushButton()
@@ -77,6 +78,7 @@ class MainWindow(QWidget):
 
     # ------------------------- BUILD GUI -------------------------
     def build_gui(self):
+        # ---------------- IMAGE ----------------
         self.image_label = ImageCanvas()
         self.image_label.log_callback = self.log_msg
         self.image_label.click_callback = self.on_click
@@ -84,26 +86,46 @@ class MainWindow(QWidget):
         self.image_label.release_callback = self.on_mouse_release
 
         scroll = self.create_scroll_area(self.image_label)
+
+        # ---------------- TOOLBAR ----------------
         toolbar_layout = self.create_toolbar()
 
-        self.create_tools()  # <--- nastaví tlačidlá tool_buttons
-        tool_panel_layout = self.create_tool_panel()  # teraz tlačidlá + brush slider
+        # ---------------- TOOLS PANEL ----------------
+        self.create_tools()
+        tool_panel_layout = self.create_tool_panel()
 
+        # zabaliť tools panel do QWidget (QSplitter podporuje len widgety)
+        tools_widget = QWidget()
+        tools_widget.setLayout(tool_panel_layout)
+
+        # ---------------- LOG ----------------
         log_widget = self.create_log_panel()
 
-        top_layout = QHBoxLayout()
-        top_layout.addLayout(toolbar_layout)
-        top_layout.addWidget(scroll)
+        # ---------------- SPLITTER (image + tools + log) ----------------
+        self.image_log_splitter = QSplitter(Qt.Orientation.Vertical)
+        self.image_log_splitter.addWidget(scroll)  # obrázok
+        self.image_log_splitter.addWidget(tools_widget)  # tools ikonky
+        self.image_log_splitter.addWidget(log_widget)  # log panel
 
-        main_layout = QVBoxLayout()
-        main_layout.addLayout(top_layout)
-        main_layout.addLayout(tool_panel_layout)
-        main_layout.addWidget(log_widget)
+        # počiatočné veľkosti (image, tools, log)
+        self.image_log_splitter.setSizes([800, 120, 80])
+
+        # tools panel nechce collapse
+        self.image_log_splitter.setCollapsible(1, False)
+
+        # ---------------- RIGHT SIDE ----------------
+        right_layout = QVBoxLayout()
+        right_layout.addWidget(self.image_log_splitter)
+
+        # ---------------- MAIN LAYOUT ----------------
+        main_layout = QHBoxLayout()
+        main_layout.addLayout(toolbar_layout)  # ľavý panel
+        main_layout.addLayout(right_layout)  # pravá časť
         self.setLayout(main_layout)
 
+        # ---------------- SIGNALS ----------------
         self.connect_signals()
         self.delete_tool = DeleteTool(self.image_label)
-        self.create_global_shortcuts()
 
     # ------------------------- SCROLL AREA -------------------------
     @staticmethod
@@ -115,21 +137,35 @@ class MainWindow(QWidget):
 
     # ------------------------- TOOLBAR -------------------------
     def create_toolbar(self):
-        buttons = [self.load_btn, self.prev_btn, self.next_btn, self.process_btn, self.save_btn]
-        icons = ["open.png", "left.png", "right.png", "yolo.png", "save.png"]
         icon_path = "assets/icons/"
+        buttons = [self.load_btn, self.process_btn, self.prev_btn, self.next_btn, self.save_btn, self.log_btn]
 
-        for b, icon_file in zip(buttons, icons):
+        icons = ["open.png", "yolo.png", "left.png", "right.png", "save.png", "log.png"]
+
+        tooltips = [
+            "Open folder (Ctrl+O)",
+            "OFF/ON Auto YOLO detection",
+            "Previous image",
+            "Next image",
+            "Save image (Ctrl+S)",
+            "Show / Hide log panel"
+        ]
+
+        for b, icon_file, tip in zip(buttons, icons, tooltips):
             b.setMaximumSize(100, 100)
             b.setMinimumSize(50, 50)
             b.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
-            b.setIcon(QIcon(resource_path(os.path.join(icon_path, icon_file))))
+
+            b.setIcon(QIcon(resource_path(icon_path + icon_file)))
             b.setIconSize(QSize(64, 64))
             b.setText("")
+
+            b.setToolTip(tip)
 
         layout = QVBoxLayout()
         for b in buttons:
             layout.addWidget(b)
+
         layout.addStretch()
         return layout
 
@@ -199,11 +235,15 @@ class MainWindow(QWidget):
         self.process_btn.clicked.connect(self.toggle_yolo_auto)
         self.save_btn.clicked.connect(self.save_image)
         self.brush_slider.valueChanged.connect(self.update_brush_size)
+        self.log_btn.clicked.connect(self.toggle_log)
 
     # ------------------------- LOG -------------------------
     def log_msg(self, msg):
         print(msg)
         self.log.append(msg)
+
+    def toggle_log(self):
+        self.log.setVisible(not self.log.isVisible())
 
     # ------------------------- YOLO AUTO -------------------------
     def toggle_yolo_auto(self):
@@ -437,7 +477,7 @@ class MainWindow(QWidget):
         sc.setContext(Qt.ShortcutContext.ApplicationShortcut)
         sc.activated.connect(self.fit_to_window)
         self.shortcuts.append(sc)
-        
+
         # CTRL + O → open folder
         sc = QShortcut(QKeySequence("Ctrl+O"), self)
         sc.setContext(Qt.ShortcutContext.ApplicationShortcut)

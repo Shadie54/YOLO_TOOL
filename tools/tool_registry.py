@@ -20,12 +20,12 @@ TOOL_REGISTRY = {
     },
     ToolType.TEXT: {
         "icon": ICON_PATH + "text.png",
-        "tooltip": "Insert text",
+        "tooltip": "Insert text (WORK IN PROGRESS)",
         "shortcut": "T",
     },
     ToolType.UNDO: {
         "icon": ICON_PATH + "undo.png",
-        "tooltip": "Undo last action",
+        "tooltip": "Undo last action (WORK IN PROGRESS)",
         "shortcut": "Ctrl+Z",
     },
 }
