@@ -33,6 +33,11 @@ class CurveTool:
             pts.append(self.preview_point)
 
         if len(pts) < 2:
+            # zobraz preview bod ešte pred prvým kliknutím
+            if preview and self.preview_point:
+                px = int(self.preview_point[0] * zoom)
+                py = int(self.preview_point[1] * zoom)
+                cv2.circle(img, (px, py), 4, (0, 0, 255), -1)
             return
 
         # kreslenie segmentov
@@ -150,7 +155,29 @@ class PolyCurveTool:
             cv2.circle(img, (px, py), 4, (0, 0, 255), -1)
 
     def finalize(self, img):
-        self.draw(img, preview=False)
+        # nakreslí len spline, preview a červené body sa neprepisujú
+        if len(self.points) < 2:
+            return
+        # 2 body -> priamka
+        if len(self.points) == 2:
+            cv2.line(img, self.points[0], self.points[1], self.brush_color, self.brush_size)
+        else:
+            # Catmull-Rom pre 3+ body
+            pts = [self.points[0]] + self.points + [self.points[-1]]
+            prev = None
+            for i in range(len(pts) - 3):
+                p0 = np.array(pts[i])
+                p1 = np.array(pts[i + 1])
+                p2 = np.array(pts[i + 2])
+                p3 = np.array(pts[i + 3])
+                for t in np.linspace(0, 1, 50):
+                    pt = self.catmull_rom(p0, p1, p2, p3, t)
+                    pt = (int(pt[0]), int(pt[1]))
+                    if prev is not None:
+                        cv2.line(img, prev, pt, self.brush_color, self.brush_size)
+                    prev = pt
+
+        # clear points, preview
         self.points.clear()
         self.preview_point = None
 

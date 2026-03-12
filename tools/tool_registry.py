@@ -14,6 +14,7 @@ TOOL_REGISTRY = {
     ToolType.WHITE: {"icon": ICON_PATH + "del.png", "tooltip": "Erase (white brush)", "shortcut": "E"},
     ToolType.TEXT: {"icon": ICON_PATH + "text.png", "tooltip": "Insert text", "shortcut": "T"},
     ToolType.UNDO: {"icon": ICON_PATH + "undo.png", "tooltip": "Undo last action", "shortcut": "Ctrl+Z"},
+    ToolType.POLYLINE: {"icon": ICON_PATH + "polyline.png", "tooltip": "Polyline tool", "shortcut": ""},
 }
 
 # ------------------------- MAIN TOOLBAR -------------------------

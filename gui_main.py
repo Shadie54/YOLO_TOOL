@@ -66,13 +66,16 @@ class MainWindow(QWidget):
         self.process_btn = QPushButton()  # YOLO / YOLO Auto
         self.save_btn = QPushButton()
         self.log_btn = QPushButton()
+
         self.freehand_btn = QPushButton()
         self.line_btn = QPushButton()
+        self.polyline_btn = QPushButton()
         self.curve_btn = QPushButton()
         self.polycurve_btn = QPushButton()
         self.white_btn = QPushButton()
         self.text_btn = QPushButton()
         self.undo_btn = QPushButton()
+
         self.brush_slider = QSlider(Qt.Orientation.Horizontal)
         self.brush_label = QLabel()
         self.log = QTextEdit()
@@ -180,6 +183,7 @@ class MainWindow(QWidget):
         self.tool_buttons = {
             ToolType.FREEHAND: self.freehand_btn,
             ToolType.LINE: self.line_btn,
+            ToolType.POLYLINE: self.polyline_btn,
             ToolType.CURVE: self.curve_btn,
             ToolType.POLYCURVE: self.polycurve_btn,
             ToolType.WHITE: self.white_btn,
@@ -358,6 +362,12 @@ class MainWindow(QWidget):
             dl.tool = tool_enum
             dl.brush_size = self.brush_size
             dl.brush_color = (255, 255, 255) if tool_enum == ToolType.WHITE else (0, 0, 0)
+        # --------- PolyLine ---------
+        elif tool_enum == ToolType.POLYLINE:
+            dl.tool = tool_enum
+            self.image_label.polyline_tool.points.clear()
+            self.image_label.polyline_tool.preview_point = None
+            self.image_label.polyline_tool.log_callback = self.image_label.log_callback
 
         # --------- Curve / PolyCurve ---------
         elif tool_enum == ToolType.CURVE:
