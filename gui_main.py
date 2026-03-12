@@ -1,3 +1,4 @@
+# gui_main.py
 import os
 os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
 import sys
@@ -357,31 +358,35 @@ class MainWindow(QWidget):
         self.current_tool_type = tool_enum
         self.image_label.drawing_enabled = True
 
-        # --------- nastavenie DrawingEngine pre klasické kreslenie ---------
+        # --------- klasické kreslenie ---------
         if tool_enum in [ToolType.FREEHAND, ToolType.LINE, ToolType.WHITE, ToolType.TEXT, ToolType.UNDO]:
             dl.tool = tool_enum
             dl.brush_size = self.brush_size
             dl.brush_color = (255, 255, 255) if tool_enum == ToolType.WHITE else (0, 0, 0)
+
         # --------- PolyLine ---------
         elif tool_enum == ToolType.POLYLINE:
             dl.tool = tool_enum
-            self.image_label.polyline_tool.points.clear()
-            self.image_label.polyline_tool.preview_point = None
-            self.image_label.polyline_tool.log_callback = self.image_label.log_callback
+            polyline = self.image_label.polyline_tool
+            polyline.points.clear()
+            polyline.preview_point = None
+            polyline.log_callback = self.image_label.log_callback
 
-        # --------- Curve / PolyCurve ---------
+        # --------- Curve ---------
         elif tool_enum == ToolType.CURVE:
             dl.tool = tool_enum
-            dl.curve_points.clear()
-            dl.preview_point = None
-            # môžeme pre istotu prepojiť log_callback
-            self.image_label.curve_tool.log_callback = self.image_label.log_callback
+            curve = self.image_label.curve_tool
+            curve.points.clear()
+            curve.preview_point = None
+            curve.log_callback = self.image_label.log_callback
 
+        # --------- PolyCurve ---------
         elif tool_enum == ToolType.POLYCURVE:
             dl.tool = tool_enum
-            dl.polycurve_points.clear()
-            dl.preview_point = None
-            self.image_label.polycurve_tool.log_callback = self.image_label.log_callback
+            polycurve = self.image_label.polycurve_tool
+            polycurve.points.clear()
+            polycurve.preview_point = None
+            polycurve.log_callback = self.image_label.log_callback
 
         # zvýraznenie tlačidla
         self._highlight_button(tool_enum)
@@ -397,8 +402,17 @@ class MainWindow(QWidget):
     def update_brush_size(self, value):
         self.brush_size = value
         self.brush_label.setText(f"Brush: {value}")
-        if self.image_label.drawing_engine:
-            self.image_label.drawing_engine.brush_size = value
+
+        dl = self.image_label.drawing_engine
+        if dl:
+            dl.brush_size = value  # pre FREEHAND / WHITE / LINE stará logika
+
+        # Nová logika pre nové nástroje
+        self.image_label.line_tool.brush_size = value
+        self.image_label.polyline_tool.brush_size = value
+        self.image_label.curve_tool.brush_size = value
+        self.image_label.polycurve_tool.brush_size = value
+
         self.log_msg(f"Brush size set to {value}")
 
     # ------------------------- LOAD / NAVIGATION -------------------------

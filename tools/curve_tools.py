@@ -1,87 +1,56 @@
 # curve_tools.py
-
 import cv2
 import numpy as np
+from tools.point_tool_base import PointToolBase  # dedíme PointToolBase
 from tools.tool_types import ToolType
 
-class CurveTool:
+class CurveTool(PointToolBase):
     """Jednoduchá 3-bodová krivka"""
+
     def __init__(self, log_callback=None, brush_size=3, brush_color=(0, 0, 0)):
-        self.points = []
-        self.preview_point = None
-        self.brush_size = brush_size
-        self.brush_color = brush_color
-        self.log_callback = log_callback
-
-    def start_point(self, x, y):
-        self.points = [(x, y)]
-        self._log(f"Curve start at {(x, y)}")
-
-    def add_point(self, x, y):
-        self.points.append((x, y))
-        self._log(f"Curve point added at {(x, y)}")
-
-    def set_preview(self, x, y):
-        self.preview_point = (x, y)
-        self._log(f"Curve preview at {(x, y)}")
+        super().__init__(log_callback=log_callback, brush_size=brush_size, brush_color=brush_color)
 
     def draw(self, img, zoom=1.0, preview=True):
-
         pts = self.points.copy()
-
         if preview and self.preview_point:
             pts.append(self.preview_point)
 
         if len(pts) < 2:
-            # zobraz preview bod ešte pred prvým kliknutím
-            if preview and self.preview_point:
-                px = int(self.preview_point[0] * zoom)
-                py = int(self.preview_point[1] * zoom)
-                cv2.circle(img, (px, py), 4, (0, 0, 255), -1)
+            self.draw_preview_point(img, zoom)
             return
 
-        # kreslenie segmentov
+        # kreslenie všetkých segmentov
         for i in range(len(pts) - 1):
-            x1 = int(pts[i][0] * zoom)
-            y1 = int(pts[i][1] * zoom)
-
-            x2 = int(pts[i + 1][0] * zoom)
-            y2 = int(pts[i + 1][1] * zoom)
-
+            x1, y1 = int(pts[i][0] * zoom), int(pts[i][1] * zoom)
+            x2, y2 = int(pts[i + 1][0] * zoom), int(pts[i + 1][1] * zoom)
             cv2.line(img, (x1, y1), (x2, y2), self.brush_color, self.brush_size)
 
-        # červené body
-        for p in self.points:
-            px = int(p[0] * zoom)
-            py = int(p[1] * zoom)
-            cv2.circle(img, (px, py), 4, (0, 0, 255), -1)
-
-    def undo_last_point(self):
-        if self.points:
-            removed = self.points.pop()
-            self._log(f"Curve undo last point {removed}")
+        # len originálne body (preview nie)
+        self.draw_points(img, zoom)
 
     def finalize(self, img):
         if len(self.points) < 2:
+            self.points.clear()
+            self.preview_point = None
             return
+
         for i in range(len(self.points) - 1):
             cv2.line(img, self.points[i], self.points[i + 1], self.brush_color, self.brush_size)
+
         self.points.clear()
         self.preview_point = None
+        self._log("Curve finalized")
 
     def _log(self, msg):
         if self.log_callback:
             self.log_callback(f"[Curve] {msg}")
 
 
-class PolyCurveTool:
+class PolyCurveTool(PointToolBase):
     """PolyCurve s Catmull-Rom spline a neobmedzeným počtom bodov"""
+
     def __init__(self, log_callback=None, brush_size=3, brush_color=(0, 0, 0)):
-        self.points = []
-        self.preview_point = None
-        self.brush_size = brush_size
-        self.brush_color = brush_color
-        self.log_callback = log_callback
+        super().__init__(log_callback=log_callback, brush_size=brush_size, brush_color=brush_color)
 
     @staticmethod
     def catmull_rom(p0, p1, p2, p3, t):
@@ -94,46 +63,22 @@ class PolyCurveTool:
             + (-p0 + 3 * p1 - 3 * p2 + p3) * t3
         )
 
-    def start_point(self, x, y):
-        self.points = [(x, y)]
-        self._log(f"PolyCurve start at {(x, y)}")
-
-    def add_point(self, x, y):
-        self.points.append((x, y))
-        self._log(f"PolyCurve point added at {(x, y)}")
-
-    def set_preview(self, x, y):
-        self.preview_point = (x, y)
-        self._log(f"PolyCurve preview at {(x, y)}")
-
-    def undo_last_point(self):
-        if self.points:
-            removed = self.points.pop()
-            self._log(f"PolyCurve undo last point {removed}")
-
     def draw(self, img, zoom=1.0, preview=True):
-        """Nakreslí body + spline na obrázok s preview bodom"""
         pts = self.points.copy()
-
-        # pridáme preview bod, ak je
         if preview and self.preview_point:
             pts.append(self.preview_point)
 
-        # ak máme len 1 bod, vykreslíme len preview bod a vrátime sa
         if len(pts) < 2:
-            if preview and self.preview_point:
-                px = int(self.preview_point[0] * zoom)
-                py = int(self.preview_point[1] * zoom)
-                cv2.circle(img, (px, py), 4, (0, 0, 255), -1)
+            self.draw_preview_point(img, zoom)
             return
 
-        # 2 body -> priamka
         if len(pts) == 2:
+            # len priamka
             x1, y1 = int(pts[0][0] * zoom), int(pts[0][1] * zoom)
             x2, y2 = int(pts[1][0] * zoom), int(pts[1][1] * zoom)
             cv2.line(img, (x1, y1), (x2, y2), self.brush_color, self.brush_size)
         else:
-            # Catmull-Rom pre 3+ body
+            # Catmull-Rom spline pre 3+ body
             p = [pts[0]] + pts + [pts[-1]]
             for i in range(len(p) - 3):
                 p0 = np.array(p[i])
@@ -148,21 +93,18 @@ class PolyCurveTool:
                         cv2.line(img, prev, pt, self.brush_color, self.brush_size)
                     prev = pt
 
-        # červené body (len originálne body, preview je už zahrnutý vyššie)
-        for p in self.points:
-            px = int(p[0] * zoom)
-            py = int(p[1] * zoom)
-            cv2.circle(img, (px, py), 4, (0, 0, 255), -1)
+        # len originálne body
+        self.draw_points(img, zoom)
 
     def finalize(self, img):
-        # nakreslí len spline, preview a červené body sa neprepisujú
         if len(self.points) < 2:
+            self.points.clear()
+            self.preview_point = None
             return
-        # 2 body -> priamka
+
         if len(self.points) == 2:
             cv2.line(img, self.points[0], self.points[1], self.brush_color, self.brush_size)
         else:
-            # Catmull-Rom pre 3+ body
             pts = [self.points[0]] + self.points + [self.points[-1]]
             prev = None
             for i in range(len(pts) - 3):
@@ -177,9 +119,9 @@ class PolyCurveTool:
                         cv2.line(img, prev, pt, self.brush_color, self.brush_size)
                     prev = pt
 
-        # clear points, preview
         self.points.clear()
         self.preview_point = None
+        self._log("PolyCurve finalized")
 
     def _log(self, msg):
         if self.log_callback:

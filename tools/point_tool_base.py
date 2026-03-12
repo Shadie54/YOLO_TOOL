@@ -1,3 +1,5 @@
+#point_tool_base.py
+import cv2
 class PointToolBase:
 
     def __init__(self, log_callback=None, brush_size=3, brush_color=(0,0,0)):
@@ -17,8 +19,14 @@ class PointToolBase:
         self.preview_point = (x,y)
 
     def undo_last_point(self):
-        if self.points:
+        """Zruší posledný bod alebo preview bod"""
+        if self.preview_point:
+            self.preview_point = None
+            self.end_point = None
+            self._log("Preview point cancelled")
+        elif self.points:
             self.points.pop()
+            self._log("Start point removed")
 
     def draw_points(self, img, zoom):
         for p in self.points:

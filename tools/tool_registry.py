@@ -1,5 +1,4 @@
 # tool_registry.py
-
 from enum import Enum, auto
 from tools.tool_types import ToolType
 

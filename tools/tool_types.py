@@ -1,3 +1,4 @@
+#tool_types.py
 from enum import Enum
 
 class ToolType(Enum):
