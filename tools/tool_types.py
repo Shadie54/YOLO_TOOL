@@ -2,11 +2,11 @@
 from enum import Enum
 
 class ToolType(Enum):
-    FREEHAND = "freehand"
+    PENCIL = "pencil"
     LINE = "line"
     POLYLINE = "polyline"
     CURVE = "curve"
     POLYCURVE = "polycurve"
-    WHITE = "white"
+    ERASER = "eraser"
     TEXT = "text"
     UNDO = "undo"

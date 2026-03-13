@@ -68,15 +68,6 @@ class MainWindow(QWidget):
         self.save_btn = QPushButton()
         self.log_btn = QPushButton()
 
-        self.freehand_btn = QPushButton()
-        self.line_btn = QPushButton()
-        self.polyline_btn = QPushButton()
-        self.curve_btn = QPushButton()
-        self.polycurve_btn = QPushButton()
-        self.white_btn = QPushButton()
-        self.text_btn = QPushButton()
-        self.undo_btn = QPushButton()
-
         self.brush_slider = QSlider(Qt.Orientation.Horizontal)
         self.brush_label = QLabel()
         self.log = QTextEdit()
@@ -180,43 +171,44 @@ class MainWindow(QWidget):
 
     # ------------------------- TOOLS -------------------------
     def create_tools(self):
-        self.tool_buttons = {
-            ToolType.FREEHAND: self.freehand_btn,
-            ToolType.LINE: self.line_btn,
-            ToolType.POLYLINE: self.polyline_btn,
-            ToolType.CURVE: self.curve_btn,
-            ToolType.POLYCURVE: self.polycurve_btn,
-            ToolType.WHITE: self.white_btn,
-            ToolType.TEXT: self.text_btn,
-            ToolType.UNDO: self.undo_btn
-        }
 
         layout = QHBoxLayout()
         layout.setSpacing(5)
         layout.setContentsMargins(10, 0, 0, 0)
 
-        for tool_enum, btn in self.tool_buttons.items():
-            props = TOOL_REGISTRY[tool_enum]
+        for tool_enum, props in TOOL_REGISTRY.items():
+
+            btn = QPushButton()
+
             btn.setIcon(QIcon(resource_path(props["icon"])))
             btn.setIconSize(QSize(64, 64))
             btn.setFixedSize(80, 80)
-            btn.setToolTip(f'{props["tooltip"]} ({props["shortcut"]})')
-            btn.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
 
-            # pripoj callback len raz
-            try:
-                btn.clicked.disconnect()
-            except TypeError:
-                pass
-            btn.clicked.connect(lambda checked=False, t=tool_enum: self.select_tool(t))
+            tooltip = props["tooltip"]
+            shortcut = props["shortcut"]
 
-            shortcut = QShortcut(QKeySequence(props["shortcut"]), self)
-            shortcut.activated.connect(lambda t=tool_enum: self.select_tool(t))
-            self.shortcuts.append(shortcut)
+            if shortcut:
+                tooltip = f"{tooltip} ({shortcut})"
+
+            btn.setToolTip(tooltip)
+
+            btn.clicked.connect(
+                lambda checked=False, t=tool_enum: self.select_tool(t)
+            )
+
+            # uložíme do registry
+            self.tool_buttons[tool_enum] = btn
+
+            # shortcut
+            if shortcut:
+                sc = QShortcut(QKeySequence(shortcut), self)
+                sc.activated.connect(lambda t=tool_enum: self.select_tool(t))
+                self.shortcuts.append(sc)
 
             layout.addWidget(btn)
 
         layout.addStretch()
+
         return layout
 
     # ------------------------- TOOL PANEL -------------------------
@@ -341,53 +333,25 @@ class MainWindow(QWidget):
 
     # ------------------------- SELECT TOOL -------------------------
     def select_tool(self, tool_enum: ToolType):
-        dl = self.image_label.drawing_engine
-        if not dl:
-            return
 
-        # zrušenie aktuálneho nástroja, ak klikneme na ten istý
         if self.current_tool_type == tool_enum:
             self.current_tool_type = None
             self.image_label.drawing_enabled = False
-            dl.tool = None
+            self.image_label.drawing_engine.tool = None
             self._highlight_button(None)
             self.log_msg("No tool active")
             return
 
         self.current_tool_type = tool_enum
         self.image_label.drawing_enabled = True
+        self.image_label.drawing_engine.tool = tool_enum
 
-        # --------- klasické kreslenie ---------
-        if tool_enum in [ToolType.FREEHAND, ToolType.LINE, ToolType.WHITE, ToolType.TEXT, ToolType.UNDO]:
-            dl.tool = tool_enum
-            dl.brush_size = self.brush_size
-            dl.brush_color = (255, 255, 255) if tool_enum == ToolType.WHITE else (0, 0, 0)
+        # reset bodových nástrojov
+        tool = self.image_label.tools.get(tool_enum)
+        if tool and hasattr(tool, "points"):
+            tool.points.clear()
+            tool.preview_point = None
 
-        # --------- PolyLine ---------
-        elif tool_enum == ToolType.POLYLINE:
-            dl.tool = tool_enum
-            polyline = self.image_label.polyline_tool
-            polyline.points.clear()
-            polyline.preview_point = None
-            polyline.log_callback = self.image_label.log_callback
-
-        # --------- Curve ---------
-        elif tool_enum == ToolType.CURVE:
-            dl.tool = tool_enum
-            curve = self.image_label.curve_tool
-            curve.points.clear()
-            curve.preview_point = None
-            curve.log_callback = self.image_label.log_callback
-
-        # --------- PolyCurve ---------
-        elif tool_enum == ToolType.POLYCURVE:
-            dl.tool = tool_enum
-            polycurve = self.image_label.polycurve_tool
-            polycurve.points.clear()
-            polycurve.preview_point = None
-            polycurve.log_callback = self.image_label.log_callback
-
-        # zvýraznenie tlačidla
         self._highlight_button(tool_enum)
         self.log_msg(f"Selected tool: {tool_enum.name}")
 
@@ -402,20 +366,12 @@ class MainWindow(QWidget):
         self.brush_size = value
         self.brush_label.setText(f"Brush: {value}")
 
-        dl = self.image_label.drawing_engine
-        if dl:
-            # stará logika pre FREEHAND / WHITE
-            dl.brush_size = value
+        for tool in self.image_label.tools.values():
+            if hasattr(tool, "brush_size"):
+                tool.brush_size = value
 
-        # nová logika pre jednotné nástroje
-        for tool in [self.image_label.line_tool,
-                     self.image_label.polyline_tool,
-                     self.image_label.curve_tool,
-                     self.image_label.polycurve_tool]:
-            tool.brush_size = value
-
-        self.log_msg(f"Brush size set to {value}")
         self.image_label.redraw()
+        self.log_msg(f"Brush size set to {value}")
 
     # ------------------------- LOAD / NAVIGATION -------------------------
     def load_folder(self):

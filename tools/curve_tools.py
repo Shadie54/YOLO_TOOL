@@ -9,6 +9,7 @@ class CurveTool(PointToolBase):
 
     def __init__(self, log_callback=None, brush_size=3, brush_color=(0, 0, 0)):
         super().__init__(log_callback=log_callback, brush_size=brush_size, brush_color=brush_color)
+        self.tool_type = ToolType.CURVE
 
     def draw(self, img, zoom=1.0, preview=True):
         pts = self.points.copy()
@@ -51,7 +52,7 @@ class PolyCurveTool(PointToolBase):
 
     def __init__(self, log_callback=None, brush_size=3, brush_color=(0, 0, 0)):
         super().__init__(log_callback=log_callback, brush_size=brush_size, brush_color=brush_color)
-
+        self.tool_type = ToolType.POLYCURVE
     @staticmethod
     def catmull_rom(p0, p1, p2, p3, t):
         t2 = t * t

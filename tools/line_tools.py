@@ -1,5 +1,6 @@
 import cv2
 from tools.point_tool_base import PointToolBase
+from tools.tool_types import ToolType
 
 # ------------------------- LINE TOOL -------------------------
 class LineTool(PointToolBase):
@@ -8,6 +9,7 @@ class LineTool(PointToolBase):
         super().__init__(log_callback=log_callback, brush_size=brush_size)
         self.start_point = None
         self.end_point = None
+        self.tool_type = ToolType.LINE
 
     def start_point_line(self, x, y):
         self.start_point = (x, y)
@@ -62,6 +64,7 @@ class PolylineTool(PointToolBase):
         super().__init__(log_callback=log_callback)
         self.brush_size = brush_size
         self.brush_color = brush_color
+        self.tool_type = ToolType.POLYLINE
 
     def draw(self, img, zoom=1.0, preview=True, draw_points=True):
         pts = self.points.copy()
