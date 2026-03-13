@@ -1,88 +1,52 @@
-#yolo_processor.py
+# yolo_processor.py
+import os
 import cv2
+
 class YoloProcessor:
     """
-    Trieda zodpovedná za načítanie YOLO modelu a spracovanie obrázka.
-    Model sa načíta až pri prvom použití (lazy loading), aby sa GUI spustilo rýchlejšie.
+    Trieda na načítanie YOLO modelu a spracovanie obrázka.
+    Lazy loading: model sa načíta až pri prvom použití, aby sa GUI spustilo rýchlejšie.
     """
 
     def __init__(self, model_path):
-        # cesta k YOLO modelu (.pt súbor)
         self.model_path = model_path
-
-        # model sa inicializuje až pri prvom použití
         self.model = None
+        self.yolo_auto = False
 
     def load_model(self):
-        """
-        Načíta YOLO model iba raz.
-        Ak už je model načítaný, funkcia nič nerobí.
-        """
-
+        """Načíta YOLO model iba raz."""
         if self.model is None:
-            print("metóda load_model sa spúšťa (YOLO_PROCESSOR.PY > load_model(self)")
-
-            import os
-
-            # zakáže Ultralytics knižnici pripájať sa na GitHub kvôli kontrole aktualizácií
-            # bez tohto môže aplikácia zamrznúť alebo spadnúť na PC bez internetu
-            os.environ["YOLO_OFFLINE"] = "true"
-
-            # import až tu (lazy import), aby sa torch/ultralytics nenačítavali pri štarte GUI
-            from ultralytics import YOLO
-
-            # načítanie modelu zo súboru
+            os.environ["YOLO_OFFLINE"] = "true"  # zabráni automatickým update checkom
+            from ultralytics import YOLO  # lazy import
             self.model = YOLO(self.model_path)
-
-            # vynúti použitie CPU (stabilnejšie na rôznych PC a pri EXE distribúcii)
             self.model.to("cpu")
 
     def process(self, image):
-        """
-        Spustí YOLO detekciu na obrázku a vykreslí bounding boxy.
-        """
-
-        # zabezpečí, že model je načítaný
+        """Spustí YOLO detekciu na obrázku a vráti obrázok s vykreslenými boxami."""
         self.load_model()
-
-        # spustenie detekcie (vynútené CPU)
         results = self.model(image, device="cpu")[0]
 
-        # ak model nenašiel žiadne objekty, vráti pôvodný obrázok
         if results.boxes is None:
             return image
 
-        # vytvorí kópiu obrázka, do ktorej budeme kresliť detekcie
         img = image.copy()
-
-        # získanie bounding boxov, tried a confidence hodnôt
         boxes = results.boxes.xyxy.cpu().numpy()
         classes = results.boxes.cls.cpu().numpy()
         confs = results.boxes.conf.cpu().numpy()
 
         for i, box in enumerate(boxes):
-
-            # súradnice bounding boxu
             x1, y1, x2, y2 = map(int, box)
-
-            # trieda objektu
             cls = int(classes[i])
-
-            # confidence modelu
             conf = confs[i]
 
-            # farba boxu podľa triedy
-            # zelená = foto
-            # červená = arrow
-            color = (0, 255, 0) if cls == 1 else (0, 0, 255)
+            # ---------- Špeciálna úprava pre "foto" ----------
+            if cls == 1:
+                x2 = int(x1 + (x2 - x1) * 2.4)
 
-            # textový label
+            color = (0, 255, 0) if cls == 1 else (0, 0, 255)
             label = "foto" if cls == 1 else "arrow"
 
-            # vykreslenie obdĺžnika
             cv2.rectangle(img, (x1, y1), (x2, y2), color, 2)
-
-            # vykreslenie textu nad boxom
             cv2.putText(
                 img,
                 f"{label} {conf:.2f}",
@@ -93,5 +57,36 @@ class YoloProcessor:
                 2
             )
 
-        # vráti obrázok s vykreslenými detekciami
         return img
+
+    def process_with_boxes(self, image):
+        """
+        Spustí detekciu a vráti list bounding boxov vo formáte:
+        [(x1, y1, x2, y2, cls), ...]
+        """
+        self.load_model()
+        results = self.model(image, device="cpu")[0]
+        boxes_out = []
+
+        if results.boxes is None:
+            return boxes_out
+
+        boxes = results.boxes.xyxy.cpu().numpy()
+        classes = results.boxes.cls.cpu().numpy()
+
+        for i, box in enumerate(boxes):
+            x1, y1, x2, y2 = map(int, box)
+            cls = int(classes[i])
+
+            # ---------- Špeciálna úprava pre "foto" ----------
+            if cls == 1:  # foto
+                x2 = int(x1 + (x2 - x1) * 2.5)
+
+            boxes_out.append((x1, y1, x2, y2, cls))
+
+        return boxes_out
+
+    def toggle_auto(self):
+        """Prepína YOLO Auto ON/OFF a vráti nový stav."""
+        self.yolo_auto = not self.yolo_auto
+        return self.yolo_auto

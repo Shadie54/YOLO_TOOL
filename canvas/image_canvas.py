@@ -33,8 +33,8 @@ class ImageCanvas(QLabel):
         self.setMouseTracking(True)
         self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
         self.mouse_pressed = False
-        self._draw_buffer = []       # body čakajúce na vykreslenie
-        self._redraw_interval = 3    # prekresľovanie po N bodoch
+        self._draw_buffer = []
+        self._redraw_interval = 3
 
         # ------------------------- Tools -------------------------
         self.pencil_tool = PencilTool(log_callback=self.log_callback)
@@ -83,15 +83,23 @@ class ImageCanvas(QLabel):
         if not tool:
             return False
 
-        if isinstance(tool, LineTool):
+        tool_type = getattr(tool, "tool_type", None)
+
+        # LINE preview
+        if tool_type == ToolType.LINE:
             if not tool.start_point:
                 tool.preview_point = (x, y)
             else:
                 tool.set_preview(x, y)
+
+        # Pencil / Eraser: preview okraj
+        elif tool_type in [ToolType.PENCIL, ToolType.ERASER]:
+            tool.set_preview(x, y)
+
+        # PolyLine / Curve / PolyCurve
         elif hasattr(tool, "set_preview"):
             tool.set_preview(x, y)
-        elif hasattr(tool, "points") and not tool.points:
-            tool.preview_point = (x, y)
+
         return True
 
     # ------------------------- Redraw -------------------------

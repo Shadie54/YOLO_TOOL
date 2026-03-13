@@ -22,7 +22,6 @@ from tools.tool_types import ToolType
 
 # ------------------------- RESOURCE PATH -------------------------
 def resource_path(relative_path: str) -> str:
-    """Vracia cestu k zdroju, funguje lokálne aj v EXE."""
     try:
         base_path = sys._MEIPASS
     except AttributeError:
@@ -39,7 +38,6 @@ class MainWindow(QWidget):
 
         # YOLO
         self.yolo = yolo_processor
-        self.yolo_auto = False
 
         # IMAGE
         self.cv_image = None
@@ -51,9 +49,8 @@ class MainWindow(QWidget):
         # TOOLS
         self.current_tool_type = None
         self.brush_size = 1
-        self.brush_color = (0, 0, 0)
-        self.shortcuts = []
         self.tool_buttons = {}
+        self.shortcuts = []
 
         # FOLDER
         self.image_paths = []
@@ -64,10 +61,9 @@ class MainWindow(QWidget):
         self.load_btn = QPushButton()
         self.prev_btn = QPushButton()
         self.next_btn = QPushButton()
-        self.process_btn = QPushButton()  # YOLO / YOLO Auto
+        self.process_btn = QPushButton()
         self.save_btn = QPushButton()
         self.log_btn = QPushButton()
-
         self.brush_slider = QSlider(Qt.Orientation.Horizontal)
         self.brush_label = QLabel()
         self.log = QTextEdit()
@@ -84,14 +80,11 @@ class MainWindow(QWidget):
         self.image_label.move_callback = self.on_mouse_move
         self.image_label.release_callback = self.on_mouse_release
 
-        # label pre zobrazenie cesty k súboru
         self.path_label = QLabel()
         self.path_label.setStyleSheet("font-weight: bold;")
         self.path_label.setWordWrap(True)
 
         scroll = self.create_scroll_area(self.image_label)
-
-        # nový wrapper widget pre label + scroll
         scroll_layout = QVBoxLayout()
         scroll_layout.setContentsMargins(0, 0, 0, 0)
         scroll_layout.setSpacing(5)
@@ -144,12 +137,6 @@ class MainWindow(QWidget):
                 btn = QPushButton()
                 setattr(self, btn_name, btn)
 
-            # priradenie YOLO a LOG buttonov
-            if tool_enum == MainToolbar.YOLO:
-                self.process_btn = btn
-            if tool_enum == MainToolbar.LOG:
-                self.log_btn = btn
-
             icon_file = str(resource_path(ICON_PATH + props["icon"]))
             btn.setIcon(QIcon(icon_file))
             btn.setIconSize(QSize(64, 64))
@@ -157,7 +144,6 @@ class MainWindow(QWidget):
             btn.setFixedSize(80, 80)
             btn.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
 
-            # odpojenie starých signálov
             try:
                 btn.clicked.disconnect()
             except TypeError:
@@ -165,53 +151,33 @@ class MainWindow(QWidget):
             btn.clicked.connect(getattr(self, props["callback"]))
 
             layout.addWidget(btn)
-
         layout.addStretch()
         return layout
 
     # ------------------------- TOOLS -------------------------
     def create_tools(self):
-
         layout = QHBoxLayout()
         layout.setSpacing(5)
         layout.setContentsMargins(10, 0, 0, 0)
-
         for tool_enum, props in TOOL_REGISTRY.items():
-
             btn = QPushButton()
-
             btn.setIcon(QIcon(resource_path(props["icon"])))
             btn.setIconSize(QSize(64, 64))
             btn.setFixedSize(80, 80)
-
             tooltip = props["tooltip"]
-            shortcut = props["shortcut"]
-
-            if shortcut:
-                tooltip = f"{tooltip} ({shortcut})"
-
+            if props["shortcut"]:
+                tooltip += f" ({props['shortcut']})"
             btn.setToolTip(tooltip)
-
-            btn.clicked.connect(
-                lambda checked=False, t=tool_enum: self.select_tool(t)
-            )
-
-            # uložíme do registry
+            btn.clicked.connect(lambda checked=False, t=tool_enum: self.select_tool(t))
             self.tool_buttons[tool_enum] = btn
-
-            # shortcut
-            if shortcut:
-                sc = QShortcut(QKeySequence(shortcut), self)
+            if props["shortcut"]:
+                sc = QShortcut(QKeySequence(props["shortcut"]), self)
                 sc.activated.connect(lambda t=tool_enum: self.select_tool(t))
                 self.shortcuts.append(sc)
-
             layout.addWidget(btn)
-
         layout.addStretch()
-
         return layout
 
-    # ------------------------- TOOL PANEL -------------------------
     def create_tool_panel(self):
         self.brush_label.setText(f"Brush: {self.brush_size}")
         self.brush_slider.setMinimum(1)
@@ -222,10 +188,8 @@ class MainWindow(QWidget):
         layout = QHBoxLayout()
         layout.setSpacing(5)
         layout.setContentsMargins(10, 0, 0, 0)
-
         for btn in self.tool_buttons.values():
             layout.addWidget(btn)
-
         layout.addWidget(self.brush_label)
         layout.addWidget(self.brush_slider)
         layout.addStretch()
@@ -237,7 +201,6 @@ class MainWindow(QWidget):
         self.log.setReadOnly(True)
         return self.log
 
-    # ------------------------- SIGNALS -------------------------
     def connect_signals(self):
         self.brush_slider.valueChanged.connect(self.update_brush_size)
 
@@ -246,141 +209,61 @@ class MainWindow(QWidget):
         print(msg)
         self.log.append(msg)
 
-    # ------------------------- TOGGLE LOG PANEL -------------------------
     def toggle_log(self):
         idx = self.image_log_splitter.indexOf(self.log)
         sizes = self.image_log_splitter.sizes()
         if sizes[idx] == 0:
             sizes[idx] = 120
             self.log.setVisible(True)
-            if not getattr(self, "_log_visible_last", None):
-                self.log_msg("Log panel shown")
-                self._log_visible_last = True
+            self.log_msg("Log panel shown")
         else:
             sizes[idx] = 0
             self.log.setVisible(False)
-            if getattr(self, "_log_visible_last", None) != False:
-                self.log_msg("Log panel hidden")
-                self._log_visible_last = False
+            self.log_msg("Log panel hidden")
         self.image_log_splitter.setSizes(sizes)
 
     # ------------------------- YOLO -------------------------
     def toggle_yolo_auto(self):
-        self.yolo_auto = not self.yolo_auto
+        self.yolo_auto = self.yolo.toggle_auto()
         btn = self.process_btn
-        if self.yolo_auto:
-            btn.setIcon(QIcon(str(resource_path(ICON_PATH + "yolo_auto.png"))))
+        if self.yolo.yolo_auto:
+            btn.setIcon(QIcon(resource_path(ICON_PATH + "yolo_auto.png")))
             self.log_msg("YOLO Auto ON")
             if self.cv_image is not None:
-                self._run_yolo_with_loading()  # <-- overlay loading screen
+                self._run_yolo_with_loading()
         else:
-            btn.setIcon(QIcon(str(resource_path(ICON_PATH + "yolo.png"))))
+            btn.setIcon(QIcon(resource_path(ICON_PATH + "yolo.png")))
             self.log_msg("YOLO Auto OFF")
 
     def _run_yolo_with_loading(self):
-        """Spustí YOLO detekciu a zobrazí loading overlay počas spracovania."""
         loading_label = QLabel("YOLO is running...", self)
         loading_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         loading_label.setStyleSheet("background-color: rgba(0,0,0,0.6); color: white; font-size: 24px;")
         loading_label.resize(self.width(), self.height())
         loading_label.show()
         QApplication.processEvents()
-
-        # spustenie detekcie synchronne
         self.process_image()
-
-        # skryť overlay
         loading_label.hide()
         loading_label.deleteLater()
 
-    # ------------------------- SAVE IMAGE -------------------------
+    # ------------------------- SAVE / LOAD / NAVIGATION -------------------------
     def save_image(self):
         if self.cv_image is None:
             return
-
         folder = Path(self.image_paths[self.current_index]).parent
         folder_name = folder.name
-
         out_folder = folder / folder_name
         out_folder.mkdir(exist_ok=True)
-
         filename = Path(self.image_paths[self.current_index]).name
         save_path = out_folder / filename
-
         cv2.imwrite(str(save_path), self.cv_image)
         self.log_msg(f"Saved: {save_path}")
 
-    # ------------------------- FIT ZOOM -------------------------
-    def fit_zoom(self):
-        if self.cv_image is None: return
-        img_h, img_w = self.cv_image.shape[:2]
-        view_w = self.image_label.parent().width()
-        view_h = self.image_label.parent().height()
-        self.zoom = min(view_w / img_w, view_h / img_h)
-
-    def fit_to_window(self):
-        self.fit_zoom()
-        self.redraw()
-        self.log_msg("Zoom: Fit to window")
-
-    # ------------------------- REDRAW -------------------------
-    def redraw(self):
-        self.image_label.boxes = self.boxes
-        self.image_label.deleted_boxes = self.deleted_boxes
-        self.image_label.hover_box = self.hover_box
-        self.image_label.zoom = self.zoom
-        self.image_label.redraw()
-
-    # ------------------------- SELECT TOOL -------------------------
-    def select_tool(self, tool_enum: ToolType):
-
-        if self.current_tool_type == tool_enum:
-            self.current_tool_type = None
-            self.image_label.drawing_enabled = False
-            self.image_label.drawing_engine.tool = None
-            self._highlight_button(None)
-            self.log_msg("No tool active")
-            return
-
-        self.current_tool_type = tool_enum
-        self.image_label.drawing_enabled = True
-        self.image_label.drawing_engine.tool = tool_enum
-
-        # reset bodových nástrojov
-        tool = self.image_label.tools.get(tool_enum)
-        if tool and hasattr(tool, "points"):
-            tool.points.clear()
-            tool.preview_point = None
-
-        self._highlight_button(tool_enum)
-        self.log_msg(f"Selected tool: {tool_enum.name}")
-
-    def _highlight_button(self, tool_enum):
-        for t, btn in self.tool_buttons.items():
-            if t == tool_enum:
-                btn.setStyleSheet("background-color: lightblue;")
-            else:
-                btn.setStyleSheet("")
-
-    def update_brush_size(self, value):
-        self.brush_size = value
-        self.brush_label.setText(f"Brush: {value}")
-
-        for tool in self.image_label.tools.values():
-            if hasattr(tool, "brush_size"):
-                tool.brush_size = value
-
-        self.image_label.redraw()
-        self.log_msg(f"Brush size set to {value}")
-
-    # ------------------------- LOAD / NAVIGATION -------------------------
     def load_folder(self):
         folder = QFileDialog.getExistingDirectory(self, "Select Folder", self.last_folder or "")
         if not folder: return
-
         folder_path = Path(folder).resolve()
         self.last_folder = str(folder_path)
-
         self.image_paths = [
             str(folder_path / f) for f in sorted(os.listdir(folder_path))
             if f.lower().endswith((".jpg", ".jpeg", ".png"))
@@ -388,7 +271,6 @@ class MainWindow(QWidget):
         if not self.image_paths:
             self.log_msg("No images found")
             return
-
         self.current_index = 0
         self.load_image()
 
@@ -402,13 +284,12 @@ class MainWindow(QWidget):
             self.log_msg(f"Failed loading image: {path}")
             self.log_msg(str(e))
             return
-
         self.boxes = []
         self.deleted_boxes = []
         self.hover_box = None
         self.fit_zoom()
         self.image_label.set_image(self.cv_image)
-        if self.yolo_auto:
+        if self.yolo.yolo_auto:
             self.process_image()
         else:
             self.redraw()
@@ -424,7 +305,59 @@ class MainWindow(QWidget):
         self.current_index = min(len(self.image_paths) - 1, self.current_index + 1)
         self.load_image()
 
-    # ------------------------- MOUSE -------------------------
+    # ------------------------- ZOOM / REDRAW -------------------------
+    def fit_zoom(self):
+        if self.cv_image is None: return
+        img_h, img_w = self.cv_image.shape[:2]
+        view_w = self.image_label.parent().width()
+        view_h = self.image_label.parent().height()
+        self.zoom = min(view_w / img_w, view_h / img_h)
+
+    def fit_to_window(self):
+        self.fit_zoom()
+        self.redraw()
+        self.log_msg("Zoom: Fit to window")
+
+    def redraw(self):
+        self.image_label.boxes = self.boxes
+        self.image_label.deleted_boxes = self.deleted_boxes
+        self.image_label.hover_box = self.hover_box
+        self.image_label.zoom = self.zoom
+        self.image_label.redraw()
+
+    # ------------------------- TOOL SELECTION -------------------------
+    def select_tool(self, tool_enum: ToolType):
+        if self.current_tool_type == tool_enum:
+            self.current_tool_type = None
+            self.image_label.drawing_enabled = False
+            self.image_label.drawing_engine.tool = None
+            self._highlight_button(None)
+            self.log_msg("No tool active")
+            return
+        self.current_tool_type = tool_enum
+        self.image_label.drawing_enabled = True
+        self.image_label.drawing_engine.tool = tool_enum
+        tool = self.image_label.tools.get(tool_enum)
+        if tool and hasattr(tool, "points"):
+            tool.points.clear()
+            tool.preview_point = None
+        self._highlight_button(tool_enum)
+        self.log_msg(f"Selected tool: {tool_enum.name}")
+
+    def _highlight_button(self, tool_enum):
+        for t, btn in self.tool_buttons.items():
+            btn.setStyleSheet("background-color: lightblue;" if t == tool_enum else "")
+
+    def update_brush_size(self, value):
+        self.brush_size = value
+        self.brush_label.setText(f"Brush: {value}")
+        for tool in self.image_label.tools.values():
+            if hasattr(tool, "brush_size"):
+                tool.brush_size = value
+        self.image_label.redraw()
+        self.log_msg(f"Brush size set to {value}")
+
+    # ------------------------- YOLO DELETE -------------------------
     def on_click(self, event):
         if self.cv_image is None or not self.boxes: return
         x = int(event.position().x() / self.zoom)
@@ -451,24 +384,11 @@ class MainWindow(QWidget):
 
     # ------------------------- YOLO PROCESS -------------------------
     def process_image(self):
-        if self.cv_image is None:
-            return
-
-        self.log_msg("Running YOLO...")
-        results = self.yolo.model(self.cv_image)[0]
-
-        self.boxes = []
-        for i, box in enumerate(results.boxes.xyxy.cpu().numpy()):
-            cls = int(results.boxes.cls[i].cpu().numpy())
-            x1, y1, x2, y2 = map(int, box)
-            if cls == 1:
-                x2 = int(x1 + (x2 - x1) * 2.5)
-            self.boxes.append((x1, y1, x2, y2, cls))
-
+        if self.cv_image is None: return
+        self.boxes = self.yolo.process_with_boxes(self.cv_image)
         self.redraw()
         self.log_msg(f"Detections: {len(self.boxes)}")
 
-    # ------------------------- ZOOM -------------------------
     def wheelEvent(self, event):
         if self.cv_image is None: return
         delta = event.angleDelta().y()
@@ -485,12 +405,9 @@ class MainWindow(QWidget):
 if __name__ == "__main__":
     ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID("YoloCAT")
     app = QApplication(sys.argv)
-
     model_path = resource_path("models/best.pt")
     yolo = YoloProcessor(model_path)
     yolo.load_model()
-    print(f"Loaded YOLO model from: {model_path}")
-
     window = MainWindow(yolo)
     window.show()
     sys.exit(app.exec())
