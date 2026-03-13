@@ -165,7 +165,17 @@ class ImageCanvas(QLabel):
                 tool.add_point(x, y)
                 self._draw_buffer.append((x, y))
 
-            # PolyLine / Curve / PolyCurve
+            # CURVE (3 point curve)
+            elif tool_type == ToolType.CURVE:
+
+                if len(tool.points) < 2:
+                    tool.add_point(x, y)
+
+                else:
+                    tool.preview_point = (x, y)
+                    tool.finalize(self.cv_img)
+
+            # PolyLine / PolyCurve
             else:
                 if not tool.points:
                     tool.start_point(x, y)
@@ -192,6 +202,7 @@ class ImageCanvas(QLabel):
             tool_type = getattr(tool, "tool_type", None)
             if tool_type in [ToolType.PENCIL, ToolType.ERASER]:
                 tool.add_point(x, y)
+                tool.set_preview(x, y)  # ← stále aktualizujeme preview počas kreslenia
                 self._draw_buffer.append((x, y))
                 if len(self._draw_buffer) >= self._redraw_interval:
                     self.redraw()
@@ -203,6 +214,7 @@ class ImageCanvas(QLabel):
             return
 
         self.move_callback and self.move_callback(event)
+        self.update_cursor()
 
     # ------------------------- Mouse Release -------------------------
     def mouseReleaseEvent(self, event):
@@ -237,3 +249,12 @@ class ImageCanvas(QLabel):
             tool.preview_point = None
             dl._log(f"{dl.tool.name} cancelled")
             self.redraw()
+
+    def update_cursor(self):
+        tool = self.get_active_tool()
+        if tool and getattr(tool, "tool_type", None) in [
+            ToolType.PENCIL, ToolType.ERASER, ToolType.LINE, ToolType.POLYLINE, ToolType.CURVE, ToolType.POLYCURVE
+        ]:
+            self.setCursor(Qt.CursorShape.CrossCursor)
+        else:
+            self.setCursor(Qt.CursorShape.ArrowCursor)

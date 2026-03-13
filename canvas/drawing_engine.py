@@ -19,7 +19,7 @@ class DrawingEngine:
     # ------------------------- DRAWING -------------------------
     def start_draw(self, x, y):
         self.drawing = True
-        if self.tool in [ToolType.FREEHAND, ToolType.WHITE]:
+        if self.tool in [ToolType.PENCIL, ToolType.ERASER]:
             self.start_point = (x, y)
             self._log(f"Start {self.tool} at {self.start_point}")
         elif self.tool == ToolType.LINE:
@@ -30,8 +30,8 @@ class DrawingEngine:
     def move_draw(self, x, y):
         if not self.drawing or self.tool is None or self.cv_img is None:
             return
-        if self.tool in [ToolType.FREEHAND, ToolType.WHITE]:
-            color = self.brush_color if self.tool == ToolType.FREEHAND else (255, 255, 255)
+        if self.tool in [ToolType.PENCIL, ToolType.ERASER]:
+            color = self.brush_color if self.tool == ToolType.PENCIL else (255, 255, 255)
             cv2.line(self.cv_img, self.start_point, (x, y), color, self.brush_size, cv2.LINE_8)
             self.start_point = (x, y)
             self._log(f"{self.tool} at {self.start_point}")
@@ -47,7 +47,7 @@ class DrawingEngine:
             self.preview_line = None
             self._log(f"Line end at {(x, y)}")
         # reset pre freehand a line
-        if self.tool in [ToolType.FREEHAND, ToolType.WHITE, ToolType.LINE]:
+        if self.tool in [ToolType.PENCIL, ToolType.ERASER, ToolType.LINE]:
             self.drawing = False
             self.start_point = None
             self.line_start = None

@@ -137,19 +137,23 @@ class MainWindow(QWidget):
                 btn = QPushButton()
                 setattr(self, btn_name, btn)
 
-            icon_file = str(resource_path(ICON_PATH + props["icon"]))
-            btn.setIcon(QIcon(icon_file))
+            # Debug print pred nastavením ikonky
+            if tool_enum == MainToolbar.YOLO:
+                icon_file = "yolo_auto.png" if self.yolo.yolo_auto else "yolo.png"
+            else:
+                icon_file = props["icon"]
+
+            btn.setIcon(QIcon(resource_path(ICON_PATH + icon_file)))
             btn.setIconSize(QSize(64, 64))
             btn.setToolTip(props["tooltip"])
             btn.setFixedSize(80, 80)
-            btn.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
 
             try:
                 btn.clicked.disconnect()
             except TypeError:
                 pass
-            btn.clicked.connect(getattr(self, props["callback"]))
 
+            btn.clicked.connect(getattr(self, props["callback"]))
             layout.addWidget(btn)
         layout.addStretch()
         return layout
@@ -203,6 +207,7 @@ class MainWindow(QWidget):
 
     def connect_signals(self):
         self.brush_slider.valueChanged.connect(self.update_brush_size)
+        QShortcut(QKeySequence("Space"), self).activated.connect(self.fit_to_window)
 
     # ------------------------- LOG -------------------------
     def log_msg(self, msg):
@@ -224,16 +229,12 @@ class MainWindow(QWidget):
 
     # ------------------------- YOLO -------------------------
     def toggle_yolo_auto(self):
-        self.yolo_auto = self.yolo.toggle_auto()
-        btn = self.process_btn
-        if self.yolo.yolo_auto:
-            btn.setIcon(QIcon(resource_path(ICON_PATH + "yolo_auto.png")))
-            self.log_msg("YOLO Auto ON")
-            if self.cv_image is not None:
-                self._run_yolo_with_loading()
-        else:
-            btn.setIcon(QIcon(resource_path(ICON_PATH + "yolo.png")))
-            self.log_msg("YOLO Auto OFF")
+        new_state = self.yolo.toggle_auto()
+        icon_file = "yolo_auto.png" if new_state else "yolo.png"
+        self.yolo_btn.setIcon(QIcon(resource_path(ICON_PATH + icon_file)))
+        self.log_msg("YOLO Auto ON" if new_state else "YOLO Auto OFF")
+        if new_state and self.cv_image is not None:
+            self._run_yolo_with_loading()
 
     def _run_yolo_with_loading(self):
         loading_label = QLabel("YOLO is running...", self)
@@ -341,6 +342,7 @@ class MainWindow(QWidget):
         if tool and hasattr(tool, "points"):
             tool.points.clear()
             tool.preview_point = None
+        self.image_label.update_cursor()
         self._highlight_button(tool_enum)
         self.log_msg(f"Selected tool: {tool_enum.name}")
 

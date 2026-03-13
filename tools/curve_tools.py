@@ -11,36 +11,76 @@ class CurveTool(PointToolBase):
         super().__init__(log_callback=log_callback, brush_size=brush_size, brush_color=brush_color)
         self.tool_type = ToolType.CURVE
 
-    def draw(self, img, zoom=1.0, preview=True):
-        pts = self.points.copy()
-        if preview and self.preview_point:
-            pts.append(self.preview_point)
+    def draw(self, img, zoom=1.0):
 
-        if len(pts) < 2:
-            self.draw_preview_point(img, zoom)
-            return
+        # --- preview body ---
+        for p in self.points:
+            px = int(p[0] * zoom)
+            py = int(p[1] * zoom)
+            cv2.circle(img, (px, py), 4, (0, 0, 255), -1)
 
-        # kreslenie všetkých segmentov
-        for i in range(len(pts) - 1):
-            x1, y1 = int(pts[i][0] * zoom), int(pts[i][1] * zoom)
-            x2, y2 = int(pts[i + 1][0] * zoom), int(pts[i + 1][1] * zoom)
-            cv2.line(img, (x1, y1), (x2, y2), self.brush_color, self.brush_size)
+        if self.preview_point:
+            px = int(self.preview_point[0] * zoom)
+            py = int(self.preview_point[1] * zoom)
+            cv2.circle(img, (px, py), 4, (0, 0, 255), -1)
 
-        # len originálne body (preview nie)
-        self.draw_points(img, zoom)
+        # --- preview prvej čiary A→B ---
+        if len(self.points) >= 2:
+            x1, y1 = self.points[0]
+            x2, y2 = self.points[1]
+
+            cv2.line(
+                img,
+                (int(x1 * zoom), int(y1 * zoom)),
+                (int(x2 * zoom), int(y2 * zoom)),
+                (120, 120, 120),
+                1
+            )
+
+        # --- preview krivky ---
+        if len(self.points) >= 2 and self.preview_point:
+
+            p0 = self.points[0]
+            p1 = self.points[1]
+            p2 = self.preview_point
+
+            pts = []
+
+            for t in range(101):
+                t = t / 100.0
+
+                x = (1 - t) ** 2 * p0[0] + 2 * (1 - t) * t * p2[0] + t ** 2 * p1[0]
+                y = (1 - t) ** 2 * p0[1] + 2 * (1 - t) * t * p2[1] + t ** 2 * p1[1]
+
+                pts.append((int(x * zoom), int(y * zoom)))
+
+            for i in range(len(pts) - 1):
+                cv2.line(img, pts[i], pts[i + 1], (0, 0, 0), self.brush_size)
 
     def finalize(self, img):
-        if len(self.points) < 2:
-            self.points.clear()
-            self.preview_point = None
+
+        if len(self.points) < 2 or not self.preview_point:
             return
 
-        for i in range(len(self.points) - 1):
-            cv2.line(img, self.points[i], self.points[i + 1], self.brush_color, self.brush_size)
+        p0 = self.points[0]
+        p1 = self.points[1]
+        p2 = self.preview_point
+
+        pts = []
+
+        for t in range(101):
+            t = t / 100.0
+
+            x = (1 - t) ** 2 * p0[0] + 2 * (1 - t) * t * p2[0] + t ** 2 * p1[0]
+            y = (1 - t) ** 2 * p0[1] + 2 * (1 - t) * t * p2[1] + t ** 2 * p1[1]
+
+            pts.append((int(x), int(y)))
+
+        for i in range(len(pts) - 1):
+            cv2.line(img, pts[i], pts[i + 1], (0, 0, 0), self.brush_size)
 
         self.points.clear()
         self.preview_point = None
-        self._log("Curve finalized")
 
     def _log(self, msg):
         if self.log_callback:

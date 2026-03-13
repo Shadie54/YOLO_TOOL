@@ -87,6 +87,6 @@ class YoloProcessor:
         return boxes_out
 
     def toggle_auto(self):
-        """Prepína YOLO Auto ON/OFF a vráti nový stav."""
         self.yolo_auto = not self.yolo_auto
+        print(f"[DEBUG] YoloProcessor.toggle_auto called, yolo_auto={self.yolo_auto}")
         return self.yolo_auto
