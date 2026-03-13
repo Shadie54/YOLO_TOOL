@@ -1,73 +1,64 @@
+# line_tools.py
 import cv2
-import numpy as np
 from tools.point_tool_base import PointToolBase
-
 
 # ------------------------- LINE TOOL -------------------------
 class LineTool(PointToolBase):
-    """
-    Jednoduchý 2-bodový line nástroj.
-    Preview: červené bodky + čierna linka
-    Finálna kresba: čierna linka
-    """
 
     def __init__(self, log_callback=None, brush_size=3):
         super().__init__(log_callback=log_callback, brush_size=brush_size)
-        self.points = []          # zoznam bodov (len 1 bod pre LINE)
-        self.preview_point = None
+        self.start_point = None
+        self.end_point = None
 
     def start_point_line(self, x, y):
-        """Začneme line nástroj"""
-        self.points = [(x, y)]
-        self.preview_point = (x, y)
-        self._log(f"Line start at {(x,y)}")
+        """Začatie linky"""
+        self.start_point = (x, y)
+        self.preview_point = (x, y)  # preview hneď od začiatku
+        self.points = [(x, y)]       # pre dispatcher jednotné použitie points
 
     def add_point_line(self, x, y):
-        """Druhý klik → finalize"""
-        if len(self.points) == 1:
-            self.points.append((x, y))   # druhý bod
-        self.preview_point = None
+        """Druhý bod a finalize"""
+        if self.start_point:
+            self.end_point = (x, y)
+            self.points.append((x, y))
 
     def set_preview(self, x, y):
-        """Preview bod počas pohybu myši"""
-        if self.points and len(self.points) == 1:
+        """Aktualizácia preview bodu pre druhý bod"""
+        if self.start_point and not self.end_point:
             self.preview_point = (x, y)
 
     def draw(self, img, zoom=1.0):
-        """Nakreslí preview linku + červené body"""
+        """Nakreslí preview linku + červené body alebo finálnu čiaru"""
 
-        # preview bod pred prvým klikom
-        if not self.points and self.preview_point:
+        # LINE preview / finálna
+        if self.start_point:
+            sx, sy = int(self.start_point[0] * zoom), int(self.start_point[1] * zoom)
+
+            if self.end_point:
+                ex, ey = int(self.end_point[0] * zoom), int(self.end_point[1] * zoom)
+                cv2.line(img, (sx, sy), (ex, ey), (0, 0, 0), self.brush_size, cv2.LINE_8)
+            elif self.preview_point:
+                ex, ey = int(self.preview_point[0] * zoom), int(self.preview_point[1] * zoom)
+                cv2.line(img, (sx, sy), (ex, ey), (0, 0, 0), self.brush_size, cv2.LINE_8)
+                cv2.circle(img, (ex, ey), 4, (0, 0, 255), -1)  # bod navrchu
+
+            # červený bod štartu vždy navrchu
+            cv2.circle(img, (sx, sy), 4, (0, 0, 255), -1)
+
+        # pred klikom: len preview bod
+        elif self.preview_point:
             px, py = int(self.preview_point[0] * zoom), int(self.preview_point[1] * zoom)
-            cv2.circle(img, (px, py), 4, (0, 0, 255), -1)
-            return
-
-        if not self.points:
-            return
-
-        pts = self.points.copy()
-        if self.preview_point:
-            pts.append(self.preview_point)
-
-        # kreslenie linky
-        if len(pts) >= 2:
-            x1, y1 = int(pts[0][0] * zoom), int(pts[0][1] * zoom)
-            x2, y2 = int(pts[1][0] * zoom), int(pts[1][1] * zoom)
-            cv2.line(img, (x1, y1), (x2, y2), (0, 0, 0), self.brush_size)
-
-        # červené body
-        for p in self.points:
-            px, py = int(p[0] * zoom), int(p[1] * zoom)
-            cv2.circle(img, (px, py), 4, (0, 0, 255), -1)
             cv2.circle(img, (px, py), 4, (0, 0, 255), -1)
 
     def finalize(self, img):
         """Nakreslí finálnu linku a vyčistí body"""
-        if len(self.points) == 2:
-            cv2.line(img, self.points[0], self.points[1], (0,0,0), self.brush_size, cv2.LINE_8)
-            self._log(f"Line drawn from {self.points[0]} to {self.points[1]}")
-        self.points.clear()
+        if self.start_point and self.end_point:
+            cv2.line(img, self.start_point, self.end_point, (0, 0, 0), self.brush_size, cv2.LINE_8)
+            self._log(f"Line drawn from {self.start_point} to {self.end_point}")
+        self.start_point = None
+        self.end_point = None
         self.preview_point = None
+        self.points.clear()
 
     def _log(self, msg):
         if self.log_callback:
@@ -93,11 +84,13 @@ class PolylineTool(PointToolBase):
                 cv2.circle(img, (px, py), 4, (0, 0, 255), -1)
             return
 
+        # kreslenie všetkých segmentov
         for i in range(len(pts) - 1):
             x1, y1 = int(pts[i][0] * zoom), int(pts[i][1] * zoom)
             x2, y2 = int(pts[i + 1][0] * zoom), int(pts[i + 1][1] * zoom)
             cv2.line(img, (x1, y1), (x2, y2), self.brush_color, self.brush_size)
 
+        # červené body pre uložené body
         if draw_points:
             for p in self.points:
                 px, py = int(p[0] * zoom), int(p[1] * zoom)
@@ -122,4 +115,3 @@ class PolylineTool(PointToolBase):
     def _log(self, msg):
         if self.log_callback:
             self.log_callback(f"[Polyline] {msg}")
-

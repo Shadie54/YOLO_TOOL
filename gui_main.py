@@ -86,7 +86,6 @@ class MainWindow(QWidget):
         self.build_gui()
 
     # ------------------------- BUILD GUI -------------------------
-    # ------------------------- BUILD GUI -------------------------
     def build_gui(self):
         self.image_label = ImageCanvas()
         self.image_label.log_callback = self.log_msg
