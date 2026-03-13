@@ -1,3 +1,4 @@
+#delete_tools.py
 class DeleteTool:
 
     def __init__(self, canvas):

@@ -1,6 +1,5 @@
+#yolo_processor.py
 import cv2
-
-
 class YoloProcessor:
     """
     Trieda zodpovedná za načítanie YOLO modelu a spracovanie obrázka.

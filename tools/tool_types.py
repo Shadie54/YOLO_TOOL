@@ -1,8 +1,12 @@
+#tool_types.py
 from enum import Enum
 
 class ToolType(Enum):
-    FREEHAND = "freehand"
+    PENCIL = "pencil"
     LINE = "line"
-    WHITE = "white"
+    POLYLINE = "polyline"
+    CURVE = "curve"
+    POLYCURVE = "polycurve"
+    ERASER = "eraser"
     TEXT = "text"
     UNDO = "undo"

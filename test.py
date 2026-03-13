@@ -1,31 +1,28 @@
-from PyQt6.QtWidgets import QApplication, QWidget, QPushButton
-from tools.tool_registry import TOOL_REGISTRY
-from tools.tool_types import ToolType
-from gui_main import MainWindow  # tvoja trieda MainWindow
+# test_gui.py
+import sys
+from PyQt6.QtWidgets import QApplication
+from gui_main import MainWindow
+from yolo.yolo_processor import YoloProcessor
 
-app = QApplication([])
+if __name__ == "__main__":
+    app = QApplication(sys.argv)
 
-window = MainWindow(None)  # YOLO model nie je potrebný
-dummy_parent = QWidget()  # parent pre headless tlačidlá
+    # inicializácia YOLO (len dummy model, nemusí detekovať nič)
+    model_path = "models/best.pt"
+    yolo = YoloProcessor(model_path)
+    yolo.load_model()
 
-# naplni tool_buttons
-window.tool_buttons = {}
-for tool_enum, props in TOOL_REGISTRY.items():
-    btn = QPushButton(dummy_parent)  # parent je nutný, aby nepadlo
-    btn.setStyleSheet("")
-    window.tool_buttons[tool_enum] = btn
+    # spustenie okna
+    window = MainWindow(yolo)
+    window.show()
 
-# test highlight
-for tool_enum in TOOL_REGISTRY.keys():
-    print(f"Selecting {tool_enum.name}")
-    window.select_tool(tool_enum)
-    for t, btn in window.tool_buttons.items():
-        state = "highlighted" if "lightblue" in btn.styleSheet() else "normal"
-        print(f"  {t.name}: {state}")
+    # Pridaj testovací obrázok (ak máš nejaký vo folderi)
+    import cv2
+    import numpy as np
+    test_img = np.ones((512, 512, 3), dtype=np.uint8) * 200  # sivý obrázok
+    window.cv_image = test_img
+    window.image_label.set_image(test_img)
+    window.image_label.redraw()
 
-# toggle off
-print("Toggling tool off")
-window.select_tool(list(TOOL_REGISTRY.keys())[0])
-for t, btn in window.tool_buttons.items():
-    state = "highlighted" if "lightblue" in btn.styleSheet() else "normal"
-    print(f"  {t.name}: {state}")
+    print("Test GUI spustené. Skús Pencil, Eraser, Line, PolyLine, Curve, PolyCurve.")
+    sys.exit(app.exec())

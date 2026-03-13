@@ -1,3 +1,4 @@
+#drawing_engine.py
 import cv2
 from tools.tool_types import ToolType
 
@@ -6,7 +7,7 @@ class DrawingEngine:
         self.cv_img = cv_img
         self.brush_size = 3
         self.brush_color = (0, 0, 0)
-        self.tool = None  # freehand / line / white
+        self.tool = None  # FREEHAND / LINE / WHITE
 
         self.drawing = False
         self.start_point = None
@@ -29,26 +30,12 @@ class DrawingEngine:
     def move_draw(self, x, y):
         if not self.drawing or self.tool is None or self.cv_img is None:
             return
-
         if self.tool in [ToolType.FREEHAND, ToolType.WHITE]:
             color = self.brush_color if self.tool == ToolType.FREEHAND else (255, 255, 255)
-            cv2.line(
-                self.cv_img,
-                self.start_point,
-                (x, y),
-                color,
-                self.brush_size,
-                cv2.LINE_8
-            )
+            cv2.line(self.cv_img, self.start_point, (x, y), color, self.brush_size, cv2.LINE_8)
             self.start_point = (x, y)
             self._log(f"{self.tool} at {self.start_point}")
-
-
-        elif self.tool == ToolType.LINE:
-
-            if self.line_start is None:
-                return
-
+        elif self.tool == ToolType.LINE and self.line_start is not None:
             self.preview_line = (self.line_start, (x, y))
             self._log(f"Preview line updated: {self.preview_line}")
 
@@ -58,10 +45,12 @@ class DrawingEngine:
         if self.tool == ToolType.LINE:
             cv2.line(self.cv_img, self.line_start, (x, y), self.brush_color, self.brush_size, cv2.LINE_8)
             self.preview_line = None
-            self._log(f"Line end at {(x,y)}")
-        self.drawing = False
-        self.start_point = None
-        self.line_start = None
+            self._log(f"Line end at {(x, y)}")
+        # reset pre freehand a line
+        if self.tool in [ToolType.FREEHAND, ToolType.WHITE, ToolType.LINE]:
+            self.drawing = False
+            self.start_point = None
+            self.line_start = None
 
     # ------------------------- LOG -------------------------
     def _log(self, msg):
