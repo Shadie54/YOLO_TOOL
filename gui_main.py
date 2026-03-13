@@ -404,15 +404,18 @@ class MainWindow(QWidget):
 
         dl = self.image_label.drawing_engine
         if dl:
-            dl.brush_size = value  # pre FREEHAND / WHITE / LINE stará logika
+            # stará logika pre FREEHAND / WHITE
+            dl.brush_size = value
 
-        # Nová logika pre nové nástroje
-        self.image_label.line_tool.brush_size = value
-        self.image_label.polyline_tool.brush_size = value
-        self.image_label.curve_tool.brush_size = value
-        self.image_label.polycurve_tool.brush_size = value
+        # nová logika pre jednotné nástroje
+        for tool in [self.image_label.line_tool,
+                     self.image_label.polyline_tool,
+                     self.image_label.curve_tool,
+                     self.image_label.polycurve_tool]:
+            tool.brush_size = value
 
         self.log_msg(f"Brush size set to {value}")
+        self.image_label.redraw()
 
     # ------------------------- LOAD / NAVIGATION -------------------------
     def load_folder(self):

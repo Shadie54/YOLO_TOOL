@@ -37,6 +37,7 @@ class ImageCanvas(QLabel):
         self.line_tool = LineTool(log_callback=self.log_callback)
         self.polyline_tool = PolylineTool(log_callback=self.log_callback)
 
+        # Dispatcher map
         self.tools = {
             ToolType.LINE: self.line_tool,
             ToolType.POLYLINE: self.polyline_tool,
@@ -57,18 +58,22 @@ class ImageCanvas(QLabel):
         return self.tools.get(dl.tool)
 
     def handle_tool_preview(self, x, y):
+        """Dispatcher pre všetky nové bodové nástroje"""
         tool = self.get_active_tool()
         if not tool:
             return False
 
         if isinstance(tool, LineTool):
-            # LINE preview bod vždy podľa myši
             if not tool.start_point:
-                tool.preview_point = (x, y)  # preview pred prvým klikom
+                tool.preview_point = (x, y)
             else:
-                tool.set_preview(x, y)  # preview medzi start a myšou
+                tool.set_preview(x, y)
+        elif isinstance(tool, PolylineTool):
+            if tool.points:
+                tool.set_preview(x, y)
+            else:
+                tool.preview_point = (x, y)
         else:
-            # ostatné nástroje
             if hasattr(tool, "points") and not tool.points:
                 tool.preview_point = (x, y)
             elif hasattr(tool, "set_preview"):
@@ -112,39 +117,26 @@ class ImageCanvas(QLabel):
         x, y = int(event.position().x() / self.zoom), int(event.position().y() / self.zoom)
         dl = self.drawing_engine
 
-        # ------------------ Undo pravým tlačidlom ------------------
+        # Undo pravým tlačidlom pre viacbodové nástroje
         if event.button() == Qt.MouseButton.RightButton:
             if dl and dl.tool in [ToolType.POLYLINE, ToolType.CURVE, ToolType.POLYCURVE]:
-                tool_map = {
-                    ToolType.POLYLINE: self.polyline_tool,
-                    ToolType.CURVE: self.curve_tool,
-                    ToolType.POLYCURVE: self.polycurve_tool
-                }
-                tool_map[dl.tool].undo_last_point()
+                self.tools[dl.tool].undo_last_point()
                 self.redraw()
             return
 
-        # ------------------ Bodové nástroje ------------------
+        # Bodové nástroje dispatcher
         if dl and dl.tool in [ToolType.LINE, ToolType.POLYLINE, ToolType.CURVE, ToolType.POLYCURVE]:
-            tool_map = {
-                ToolType.LINE: self.line_tool,
-                ToolType.POLYLINE: self.polyline_tool,
-                ToolType.CURVE: self.curve_tool,
-                ToolType.POLYCURVE: self.polycurve_tool
-            }
-            tool = tool_map[dl.tool]
+            tool = self.tools[dl.tool]
 
-            # LINE má samostatné start_point / end_point
             if dl.tool == ToolType.LINE:
                 if not tool.start_point:
                     tool.start_point = (x, y)
-                    tool.preview_point = (x, y)  # hneď vidíme červenú bodku
+                    tool.preview_point = (x, y)
                 elif not tool.end_point:
                     tool.end_point = (x, y)
                     tool.preview_point = None
                     tool.finalize(self.cv_img)
             else:
-                # PolyLine / Curve / PolyCurve
                 if not tool.points:
                     tool.start_point(x, y)
                 else:
@@ -153,30 +145,30 @@ class ImageCanvas(QLabel):
             self.redraw()
             return
 
-        # ------------------ Staré drawing tools ------------------
+        # Staré drawing tools
         if self.drawing_enabled and dl:
             dl.start_draw(x, y)
             return
 
-        # ------------------ YOLO delete ------------------
+        # YOLO delete
         self.click_callback and self.click_callback(event)
 
     def mouseMoveEvent(self, event):
         x, y = int(event.position().x() / self.zoom), int(event.position().y() / self.zoom)
 
-        # ------------------ Tool preview dispatcher ------------------
+        # Tool preview dispatcher
         if self.handle_tool_preview(x, y):
             self.redraw()
             return
 
-        # ------------------ Drawing pre FREEHAND / WHITE ------------------
+        # Drawing pre FREEHAND / WHITE
         dl = self.drawing_engine
         if self.drawing_enabled and dl and dl.drawing:
             dl.move_draw(x, y)
             self.redraw()
             return
 
-        # ------------------ YOLO hover ------------------
+        # YOLO hover
         self.move_callback and self.move_callback(event)
 
     def mouseReleaseEvent(self, event):
@@ -195,21 +187,16 @@ class ImageCanvas(QLabel):
             return super().keyPressEvent(event)
 
         key = event.key()
-        tool_map = {
-            ToolType.POLYLINE: self.polyline_tool,
-            ToolType.CURVE: self.curve_tool,
-            ToolType.POLYCURVE: self.polycurve_tool
-        }
+        tool = self.tools[dl.tool]
 
         # FINALIZE
         if key in (Qt.Key.Key_Return, Qt.Key.Key_Enter):
-            tool_map[dl.tool].finalize(self.cv_img)
+            tool.finalize(self.cv_img)
             dl._log(f"{dl.tool.name} finalized")
             self.redraw()
 
         # CANCEL
         elif key == Qt.Key.Key_Escape:
-            tool = tool_map[dl.tool]
             tool.points.clear()
             tool.preview_point = None
             dl._log(f"{dl.tool.name} cancelled")

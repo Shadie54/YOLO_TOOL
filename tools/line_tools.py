@@ -1,4 +1,3 @@
-# line_tools.py
 import cv2
 from tools.point_tool_base import PointToolBase
 
@@ -11,25 +10,20 @@ class LineTool(PointToolBase):
         self.end_point = None
 
     def start_point_line(self, x, y):
-        """Začatie linky"""
         self.start_point = (x, y)
-        self.preview_point = (x, y)  # preview hneď od začiatku
-        self.points = [(x, y)]       # pre dispatcher jednotné použitie points
+        self.preview_point = (x, y)
+        self.points = [(x, y)]  # jednotné použitie points pre dispatcher
 
     def add_point_line(self, x, y):
-        """Druhý bod a finalize"""
         if self.start_point:
             self.end_point = (x, y)
             self.points.append((x, y))
 
     def set_preview(self, x, y):
-        """Aktualizácia preview bodu pre druhý bod"""
         if self.start_point and not self.end_point:
             self.preview_point = (x, y)
 
     def draw(self, img, zoom=1.0):
-        """Nakreslí preview linku + červené body alebo finálnu čiaru"""
-
         # LINE preview / finálna
         if self.start_point:
             sx, sy = int(self.start_point[0] * zoom), int(self.start_point[1] * zoom)
@@ -40,18 +34,15 @@ class LineTool(PointToolBase):
             elif self.preview_point:
                 ex, ey = int(self.preview_point[0] * zoom), int(self.preview_point[1] * zoom)
                 cv2.line(img, (sx, sy), (ex, ey), (0, 0, 0), self.brush_size, cv2.LINE_8)
-                cv2.circle(img, (ex, ey), 4, (0, 0, 255), -1)  # bod navrchu
+                cv2.circle(img, (ex, ey), 4, (0, 0, 255), -1)
 
-            # červený bod štartu vždy navrchu
+            # červený bod štartu navrchu
             cv2.circle(img, (sx, sy), 4, (0, 0, 255), -1)
-
-        # pred klikom: len preview bod
         elif self.preview_point:
             px, py = int(self.preview_point[0] * zoom), int(self.preview_point[1] * zoom)
             cv2.circle(img, (px, py), 4, (0, 0, 255), -1)
 
     def finalize(self, img):
-        """Nakreslí finálnu linku a vyčistí body"""
         if self.start_point and self.end_point:
             cv2.line(img, self.start_point, self.end_point, (0, 0, 0), self.brush_size, cv2.LINE_8)
             self._log(f"Line drawn from {self.start_point} to {self.end_point}")
@@ -66,7 +57,6 @@ class LineTool(PointToolBase):
 
 # ------------------------- POLYLINE TOOL -------------------------
 class PolylineTool(PointToolBase):
-    """Polyline nástroj: kreslí sériu rovnakých priamok, s preview bodom"""
 
     def __init__(self, log_callback=None, brush_size=3, brush_color=(0, 0, 0)):
         super().__init__(log_callback=log_callback)
@@ -78,13 +68,13 @@ class PolylineTool(PointToolBase):
         if preview and self.preview_point:
             pts.append(self.preview_point)
 
-        if len(pts) < 2:
+        if len(pts) < 1:
             if self.preview_point and draw_points:
                 px, py = int(self.preview_point[0] * zoom), int(self.preview_point[1] * zoom)
                 cv2.circle(img, (px, py), 4, (0, 0, 255), -1)
             return
 
-        # kreslenie všetkých segmentov
+        # kreslí všetky segmenty
         for i in range(len(pts) - 1):
             x1, y1 = int(pts[i][0] * zoom), int(pts[i][1] * zoom)
             x2, y2 = int(pts[i + 1][0] * zoom), int(pts[i + 1][1] * zoom)
@@ -95,6 +85,11 @@ class PolylineTool(PointToolBase):
             for p in self.points:
                 px, py = int(p[0] * zoom), int(p[1] * zoom)
                 cv2.circle(img, (px, py), 4, (0, 0, 255), -1)
+
+        # preview bod navrchu
+        if preview and self.preview_point:
+            px, py = int(self.preview_point[0] * zoom), int(self.preview_point[1] * zoom)
+            cv2.circle(img, (px, py), 4, (0, 0, 255), -1)
 
     def finalize(self, img):
         pts = self.points
